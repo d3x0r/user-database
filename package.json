@@ -26,7 +26,7 @@
     "@d3x0r/srg": "^1.2.0",
     "@d3x0r/bloomnhash": "latest",
     "@d3x0r/slab-array": "latest",
-    "jsox": "latest"
-    "sack.vfs": "latest"
+    "jsox": "latest",
+    "sack.vfs": "github:d3x0r/sack.vfs"
   }
 }
