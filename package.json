@@ -1,0 +1,32 @@
+{
+  "name": "@d3x0r/user-database",
+  "version": "1.0.0",
+  "description": "User database microservice",
+  "main": "UserDb.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "go": "node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/d3x0r/user-database.git"
+  },
+  "keywords": [
+    "User-account",
+    "database"
+  ],
+  "author": "d3x0r",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/d3x0r/user-database/issues"
+  },
+  "homepage": "https://github.com/d3x0r/user-database#readme",
+  "dependencies": {
+    "@d3x0r/popups": "latest",
+    "@d3x0r/srg": "^1.2.0",
+    "@d3x0r/bloomnhash": "latest",
+    "@d3x0r/slab-array": "latest",
+    "jsox": "latest"
+    "sack.vfs": "latest"
+  }
+}
