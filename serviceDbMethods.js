@@ -1,10 +1,8 @@
 const _debug_location = false;
 
 const ws = this;
-console.log( "Extend this websocket:", this );
+//console.log( "Extend this websocket:", this );
 
-
-  //const sack = (await Import( "sack.vfs" )).sack;
 const serviceConfig = (await Import("./config.jsox")).default;
 
 const os = await Import( "os" );
@@ -104,7 +102,7 @@ if( srvc instanceof Array ) {
 	registerService( srvc, srvc.badges );
 
 function registerService( srvc ) {
-console.log( "Blah:", serviceConfig, serviceConfig.publicAddresses );
+	//console.log( "Blah:", serviceConfig, serviceConfig.publicAddresses );
 	ws.send( JSOX.stringify( { op:"register", sid:mySID, svc:srvc, loc:loc, addr:config.addresses, iaddr:config.internal_addresses, public:serviceConfig.publicAddresses } ) );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
@@ -241,7 +239,9 @@ function getLocation() {
 		config.internal_addresses.splice( 0, 1 );
 		config.internal_addresses.push( save );
 	}
-	console.log( "Usable addresses:", config.addresses, "internal:", config.internal_addresses, "here:", here, "JSOX(here):", JSOX.stringify( here ) );
+
+	//console.log( "Usable addresses:", config.addresses, "internal:", config.internal_addresses, "here:", here, "JSOX(here):", JSOX.stringify( here ) );
+
 	//here = "/home/chatment/kcore00:00:00:00:00:000c:c4:7a:7f:93:500c:c4:7a:7f:93:500c:c4:7a:7f:93:510c:c4:7a:7f:93:51";
 	//console.log( "here is:", here,  idGen.regenerator( here ) );
 	return sack.id( JSOX.stringify( here ) );

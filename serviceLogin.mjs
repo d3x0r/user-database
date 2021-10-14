@@ -82,7 +82,7 @@ export const UserDbRemote = {
 	open(opts) {
 		const realOpts = Object.assign( {}, opts );
 		realOpts.protocol= "userDatabaseClient";
-		realOpts.server = opts.server || "ws://localhost:8089/";	
+		realOpts.server = opts.server || "wss://localhost:8089/";	
 		realOpts.authorize = (a)=>{
 			console.log( "authorize argument:", a );
 		}

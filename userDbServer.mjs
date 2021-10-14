@@ -11,7 +11,8 @@ const nearPath = where.substr(0, nearIdx+1 );
 
 import path from "path";
 import {sack} from "sack.vfs"
-
+const nativeDisk = sack.Volume();
+import config from "./config.jsox"
 
 const withLoader = true;//process.env.SELF_LOADED;
 // make sure we load the import script
@@ -92,10 +93,13 @@ const resourcePerms = {
 	}
 }
 
-
 // go is from userDb; waits for database to be ready.
 if( withLoader ) go.then( ()=>{
-        openServer( { port : 8089 } );
+        openServer( { port : Number(process.argv[2])||8089 
+			, cert : nativeDisk.read( config.certPath + "/cert.pem" ).toString()
+			, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
+			, ca : nativeDisk.read( config.certPath + "/fullchain.pem" ).toString()
+			} );
 } );
 else {
 	function doNothing() { setTimeout( doNothing, 10000000 ); } doNothing();
@@ -120,12 +124,12 @@ UserDb.on( "pickSash", (user, choices)=>{
 
 function openServer( opts, cb )
 {
-	const serverOpts = opts || {port:Number(process.argv[2])||8080} ;
+	const serverOpts = opts;
 	const server = sack.WebSocket.Server( serverOpts )
 	const disk = sack.Volume();
-	console.log( "serving on " + serverOpts.port, server );
+	console.log( "serving on " + serverOpts.port );
 
-	UserDbRemote.open( { server:"ws://localhost:"+serverOpts.port } );
+	UserDbRemote.open( { server:"wss://localhost:"+serverOpts.port } );
 
 	//console.table( disk.dir() );
 
@@ -138,9 +142,9 @@ function openServer( opts, cb )
 
 	function getResource( req_url, user ) {
 		const res = {
-			code: 404,
-			content : null,
-                        headers : { 'Content-Type': "text/html" },
+			code: 404
+			, content : null
+            , headers : { 'Content-Type': "text/html" },
 		};
 		const parts = req_url.split( '/' );
 		if( parts.length < 3 ) {
@@ -420,13 +424,13 @@ function openServer( opts, cb )
 		// msg.org is 'org.jsox' from the client
 		// sid is the last SID we assigned.
 		if( msg.sid ) {
-                	console.log( "service is asking to reconnect...", msg.sid );
+            console.log( "service is asking to reconnect...", msg.sid );
 			//const srvc = await UserDb.getService( msg.svc );
 			
 		} 
 	//else 
 		{
-         console.log( "otherwise find the service (post reg)" );
+         	console.log( "otherwise find the service (post reg)" );
 			const svc = await  UserDb.getService( msg.svc ).then( (s)=>{
 				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
 				s.connect( ws );
@@ -579,8 +583,9 @@ function openServer( opts, cb )
 		}
 
 		function handleService( msg_ ) {
+			//console.log( "MSG:", msg_ );
 			const msg = JSOX.parse( msg_ );
-			console.log( 'userLocal message:', msg );
+			//console.log( 'userLocal message:', msg );
 			if( msg.op === "register" ) {
 				handleServiceMsg( ws, msg );
 				//ws.send( methodMsg );
