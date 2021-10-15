@@ -797,7 +797,9 @@ const UserDb = {
                         
 			l.clients   = await storage.get( l.ids.clientId );
 			l.email     = await storage.get( l.ids.emailId );
+			l.email.caseInsensitive = true;
 			l.account   = await storage.get( l.ids.accountId );
+			l.account.caseInsensitive = true;
 			if( l.ids.nameId) 
 				l.name      = await storage.get( l.ids.nameId );
 			else {
@@ -805,10 +807,13 @@ const UserDb = {
 				l.name.hook( storage );
 				l.ids.nameId      = await l.name.store();
 			}
+			l.name.caseInsensitive = true;
 			l.reconnect = await storage.get( l.ids.reconnectId );
 
 			l.orgs      = await storage.get( l.ids.orgId );
+			l.orgs.caseInsensitive = true;
 			l.domains   = await storage.get( l.ids.domainId );
+			l.domains.caseInsensitive = true;
 
 		} else {
 			//console.log( "User Db Config ERR:", err );
@@ -817,17 +822,22 @@ const UserDb = {
 			l.clients   = new BloomNHash();
 			l.clients.hook( storage );
 			l.account   = new BloomNHash();
+			l.account.caseInsensitive = true;
 			l.account.hook( storage );
 			l.name      = new BloomNHash();
+			l.name.caseInsensitive = true;
 			l.name.hook( storage );
 			l.email     = new BloomNHash();
+			l.email.caseInsensitive = true;
 			l.email.hook( storage );
 			l.reconnect = new BloomNHash();
 			l.reconnect.hook( storage );
 
 			l.domains = new BloomNHash();
+			l.domains.caseInsensitive = true;
 			l.domains.hook( storage );
 			l.orgs    = new BloomNHash();
+			l.orgs.caseInsensitive = true;
 			l.orgs.hook( storage );
 
 			l.ids.clientId    = await l.clients.store();
@@ -864,6 +874,18 @@ const UserDb = {
 	},
 	getUser(args){
 		return getUser(args);
+	},
+	async isEmailUsed( email ) {
+		// this is just used for a check 'if used'
+		return !(await l.email.get( email ));
+	},
+	async isNameUsed( name ) {
+		// this is just used for a check 'if used'
+		return !!(await l.name.get( name ));
+	},
+	async isAccountUsed( account ) {
+		// this is just used for a check 'if used'
+		return !!(await l.account.get( account ));
 	},
 	User:User,
 	async getIdentifier( i ) {

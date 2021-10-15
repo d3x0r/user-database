@@ -140,7 +140,7 @@ function openServer( opts, cb )
 		}
 	}
 
-	function getResource( req_url, user ) {
+	function getResource( req_url, req, user ) {
 		const res = {
 			code: 404
 			, content : null
@@ -205,6 +205,10 @@ function openServer( opts, cb )
 
 		console.log( ":", extname, filePath )
 		res.headers["Content-Type"] = mimeTypes[extname];
+		if( req /*&& parts[parts.length-1]==="webSocketClient.js"*/ ) {
+			res.headers['Access-Control-Allow-Origin'] = req.headers.Origin;
+			res.headers['Vary'] = "origin";
+		}
 		if( disk.exists( filePath ) ) {
 			console.log( "Read:", req_url, "as", filePath  );
 			res.code = 200; 
@@ -223,7 +227,7 @@ function openServer( opts, cb )
 			req.socket.remoteAddress ||
 			req.connection.socket.remoteAddress;
 
-		const resource = getResource( req.url, null );
+		const resource = getResource( req.url, req, null );
 		res.writeHead(resource.code, resource.headers);
 		res.end( resource.content );
 	} ;
@@ -509,7 +513,7 @@ function openServer( opts, cb )
 		}
 
 		function handleProfile( msg_ ) {
-			console.log( 'profile Socket message:', msg );
+			//console.log( 'profile Socket message:', msg );
 			if( !user ) {
 				user = l.expect.get( msg_ );
 				if( !user ) {
@@ -518,14 +522,14 @@ function openServer( opts, cb )
 					return;
 				}else
 					l.expect.delete( msg_ );
-				console.log( "user connected!", user );
+				//console.log( "user connected!", user );
 			}else {
 				const is_ll = msg_[0] === "\0";
 				const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
 				if( is_ll && msg.op === "get" ){
 					//, {op:"get", url:url, id:newEvent.id } );
 					if( msg.url ){
-			                	const res = getResource( msg.url, user );
+			                	const res = getResource( msg.url, null, user );
 						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
 					}
 					else
@@ -544,7 +548,7 @@ function openServer( opts, cb )
 
 
 		function handleAdmin( msg_ ) {
-			console.log( 'admin Socket message:', msg );
+			//console.log( 'admin Socket message:', msg );
 			if( !user ) {
 				user = l.expect.get( msg_ );
 				if( !user ) {
@@ -559,7 +563,7 @@ function openServer( opts, cb )
 				if( is_ll && msg.op === "get" ){
 					//, {op:"get", url:url, id:newEvent.id } );
 					if( msg.url ){
-			                	const res = getResource( msg.url, user );
+			                	const res = getResource( msg.url, null, user );
 						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
 					}
 					else
@@ -602,7 +606,7 @@ function openServer( opts, cb )
 
 		function handleClient( msg_ ) {
 			const msg = JSOX.parse( msg_ );
-			console.log( 'message:', msg );
+			//console.log( 'message:', msg );
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
@@ -646,29 +650,16 @@ function openServer( opts, cb )
 			}
 		};
 	};
-
 }
 
 
-
-
-
-
-
 function checkEmail( email ) {
-	const p = {p:null,res:null};
-	p.p = new Promise( (res,rej)=>p.res =res );
-	console.log( "CHECK email:", email);
-	validateEmail( email, ( valid )=> {
-		if( !valid ) p.res( false );
-		else {
-			var user = db.do( `select 1 from users3 where email='${email}' COLLATE NOCASE`);
-			if( user && user.length )
-				p.res( true );
-			p.res( false );
-		}
-	} );
-	return p.p;
+	return new Promise( (res,rej)=>{
+		validateEmail( email, ( valid )=> {
+			if( !valid ) res( false );
+			else res( UserDb.isEmailUsed( email ) );
+		} );
+	});
 }
 
 const domainAllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"

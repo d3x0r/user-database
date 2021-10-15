@@ -1,6 +1,6 @@
 
 import {sack} from "sack.vfs";
-import {default as config} from "./config.jsox";
+//import {default as config} from "./config.jsox";
 
 const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
 

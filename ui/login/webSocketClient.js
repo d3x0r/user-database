@@ -2,11 +2,25 @@
 //import {popups,AlertForm} from "../popups.mjs"
 //const JSOX = JSON;
 
+// right now this gets loaded via proxy, and sent from the origin website, 
+// this means any dependancies are from the client website, unless otherwise hardcoded here.
+// 
+
+//const origin = "https://d3x0r.org:8089"
+
 import {popups,AlertForm} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
-
-import {workerInterface} from "./swc.js"
-workerInterface.initWorker();
+//console.log( "location:", location, import.meta );
+let workerInterface = null;
+const importing = import( location.origin+"/socket-service-client.js" ).then( (module)=>{
+	workerInterface = module.workerInterface;
+	workerInterface.initWorker();
+} ).catch ((err)=>{
+	if( !alertForm ) alertForm = new AlertForm();
+	alertForm.caption = "Site does not support socket-service.";
+	alertForm.show();
+} );
+//import {workerInterface} from location.origin+"/socket-service-client.js"
 
 let isGuestLogin = false;
 let createMode = false;
@@ -168,7 +182,17 @@ const l = {
 	request( domain, service ) {
 		return l.ws.request( domain, service );
 	},
-	openSocket:openSocket
+	openSocket:openSocket,
+	events : {},
+	on( evt, d ) {
+		if( "function" === typeof d ) {
+			if( evt in l.events ) l.events[evt].push(d);
+			else l.events[evt] = [d];
+		}else {
+			if( evt in l.events ) l.events[evt].forEach( cb=>cb() );
+		}
+	}
+	
 }
 const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
 
@@ -255,14 +279,22 @@ async function 	pickSash( ws, choices ){
 	ws.send( {op:"pickSash", ok:false, sash : "Choice not possible." } );
 }
 
-function openSocket( addr, cb, protocol ) {
+async function openSocket( addr, cb, protocol ) {
+	if( !workerInterface )  {
+		await importing
+	}
+	return new Promise( (res,rej)=>{
+	addr = addr || "d3x0r.org:8089" || location.host;
+	
 
-	addr = addr || location.host
+	const  proto = "wss:";//location.protocol==="http:"?"ws:":"wss:";
 
-	const  proto = location.protocol==="http:"?"ws:":"wss:";
         workerInterface.connect( proto+"//"+addr+"/", protocol|| "login", (statusmsg, msg)=>{
 		if( statusmsg === true ) {
-			cb(msg);
+			if( cb ) cb(msg);
+			else if( "object" === typeof msg ){ res( msg );
+				console.log( "resolved with msg..." );
+			}else console.log( "Dropped message:", msg );
 			l.ws = msg;
 			//console.log( "is websocket?", msg );
 
@@ -271,28 +303,7 @@ function openSocket( addr, cb, protocol ) {
 		}
 	}, processMessage );
 
-	
-/*		
-	var ws = new WebSocket(proto+"//"+addr+"/", "login");
-	
-	console.log( "websocket:", ws, proto+"//"+location.host+"/" );
-	ws.onopen = function() {
-		l.ws = ws;
-		ws.send( '{ op: "hello" }' );
-	};
-	ws.onmessage = function (evt) { 
-  	  	const msg_ = JSOX.parse( evt.data );
-		if( !ws.processMessage || !ws.processMessage( ws, msg_ ) )
-			processMessage( msg_ );
-	};
-	ws.onclose = function() { 
-		l.ws = null;
-		if( l.loginForm && l.loginForm.disconnect )
-		       l.loginForm.disconnect();
-		setTimeout( openSocket, 5000 ); // 5 second delay.
-  	  	// websocket is closed. 
-	};
-*/
+	} );
 }
 
 
