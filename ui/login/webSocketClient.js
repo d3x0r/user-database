@@ -8,11 +8,14 @@
 
 //const origin = "https://d3x0r.org:8089"
 
+const here = new URL( import.meta.url );
+console.log( "Origin? Meta?", location, import.meta, here );
+
 import {popups,AlertForm} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
 //console.log( "location:", location, import.meta );
 let workerInterface = null;
-const importing = import( location.origin+"/socket-service-client.js" ).then( (module)=>{
+const importing = import( here.origin+"/node_modules/@d3x0r/socket-service/swc.js" ).then( (module)=>{
 	workerInterface = module.workerInterface;
 	workerInterface.initWorker();
 } ).catch ((err)=>{
