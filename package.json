@@ -5,7 +5,8 @@
   "main": "UserDb.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "go": "node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs"
+    "go": "node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs",
+    "gdb": "gdb --args node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs"
   },
   "repository": {
     "type": "git",
