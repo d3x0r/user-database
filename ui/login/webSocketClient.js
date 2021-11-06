@@ -64,13 +64,13 @@ const l = {
 		const passField22 =form2.querySelector( "#password2" );
 
 		const userField3 =form3.querySelector( "#user" );
-
 		const userLogin = f.querySelector( "#doLogin" );
 		
 		const createAccount = f.querySelector( "#createAccount" );
 		const createAccountInner = f.querySelector( "#createAccountInner" );
 		const guestLogin = f.querySelector( "#guestLogin" );
 		const guestLoginInner =  f.querySelector( "#guestLoginInner" );
+
 
 		form1.addEventListener( "submit", (evt)=>{
 			evt.preventDefault();
@@ -191,8 +191,11 @@ const l = {
 		if( "function" === typeof d ) {
 			if( evt in l.events ) l.events[evt].push(d);
 			else l.events[evt] = [d];
+			return d;
 		}else {
-			if( evt in l.events ) l.events[evt].forEach( cb=>cb() );
+			let result = null;
+			if( evt in l.events ) l.events[evt].forEach( cb=>(result=cb(d,result)) );
+			return result;
 		}
 	}
 	
@@ -202,7 +205,7 @@ const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
 let alertForm = null ;
 
 function Alert( s ) {
-	if( !alertForm ) alertForm = new AlertForm();
+	if( !alertForm ) alertForm = new AlertForm(l.loginForm.divFrame.parentNode);
 	alertForm.caption = s;
 	alertForm.show();
 } 
@@ -215,8 +218,8 @@ function processMessage( msg_ ) {
 	if( msg.op === "addMethod" ) {
 		try {
 		    	// why is this not in a module?
-			var f = new AsyncFunction( "JSON", "Import", "connector", msg.code );
-			const p = f.call( l.ws, JSOX, (i)=>import(i), l );
+			var f = new AsyncFunction( "JSON", "Import", "connector", "Alert", msg.code );
+			const p = f.call( l.ws, JSOX, (i)=>import(i), l, Alert );
 			l.connected = true;
 			if( l.loginForm )
 				l.loginForm.connect();
@@ -226,7 +229,7 @@ function processMessage( msg_ ) {
 	}
 	else if( msg.op === "login" ) {
 		if( msg.success ) {
-			Alert(" Login Success" );
+			//Alert(" Login Success" );
 			if( l.loginForm && l.loginForm.login )
 				l.loginForm.login(true);
 		} else if( msg.ban ) {
@@ -242,7 +245,7 @@ function processMessage( msg_ ) {
 	}
 	else if( msg.op === "guest" ) {
 		if( msg.success ) {
-			Alert(" Login Success" );
+			//Alert(" Login Success" );
 			if( l.loginForm && l.loginForm.login )
 				l.loginForm.login(false);
 		} else
@@ -252,8 +255,8 @@ function processMessage( msg_ ) {
 	else if( msg.op === "create" ) {
 		if( msg.success ) {
 			if( l.loginForm && l.loginForm.login )
-				l.loginForm.login();
-			Alert(" Login Success" );			
+				l.loginForm.login( 1 );
+			//Alert(" Login Success" );			
 		} else if( msg.ban )  {
 			Alert( "Bannable Offense" );
 		} else if( msg.account ) {

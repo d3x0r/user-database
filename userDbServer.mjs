@@ -287,7 +287,7 @@ function openServer( opts, cb )
 		//msg.deviceId = setKey( msg.deviceId,ws,"deviceId" );
 
 		const user = ( await UserDb.getUser( msg.user ) ) || 
-				(await useClient.addUser( sack.Id(), msg.user, sack.Id()+"@d3x0r.org", "password" ) );
+				(await useClient.addUser( msg.user, sack.Id(), sack.Id()+"@d3x0r.org", "password" ) );
 
 
 		console.log( "user:", user );
@@ -325,7 +325,7 @@ function openServer( opts, cb )
 			//msg.deviceId = null; // force generate new device for reversion
 		}
 
-		//console.log( "user:", user );
+		console.log( "user:", user, msg.password );
 		if( !user || user.pass !== msg.password ) {
 			ws.send( JSON.stringify( { op:"login", success: false } ) );
 			return;
@@ -334,6 +334,7 @@ function openServer( opts, cb )
 		ws.state.user = user;
 		ws.state.login = msg;
 		const dev = await user.getDevice( msg.deviceId );
+		console.log( "dev:", dev );
 		if( !dev ) {
 			ws.state.login = msg;
 			// ask the device to add a device.
@@ -429,22 +430,32 @@ function openServer( opts, cb )
 		// sid is the last SID we assigned.
 		if( msg.sid ) {
             console.log( "service is asking to reconnect...", msg.sid );
-			//const srvc = await UserDb.getService( msg.svc );
-			
+			// this will wait until a client asks for this service; even on reconnect
+			const srvc = await UserDb.getService( ws, msg.svc );
+			console.log( "Service:", srvc );
+			const inst = srvc.getServiceInstance( msg.sid );
+			if( inst )
+				inst.connect( ws );		
+			else {
+				console.log(" THis is adding a new instance for that service; BAD id recovery");
+				srvc.addInstance( ws); // does connect also.
+				//inst.connect( ws );
+			}
 		} 
-	//else 
+		else 
 		{
-         	console.log( "otherwise find the service (post reg)" );
-			const svc = await  UserDb.getService( msg.svc ).then( (s)=>{
+         	console.log( "otherwise find the service (post reg)", msg );
+			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
 				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
-				s.connect( ws );
+				s = s.addInstance( ws );
+				//s.connect( ws );
 				//ws.send( JSOX.stringify( { op:"registered" }) )
 				return s;
 			} );
 			if( svc ) {
 				// register service finally gets a result... and sends my response.
 				console.log( "Service resulted, and is an instance?", svc );
-				ws.send( JSOX.stringify( { op:"register", ok:true, sid: svc.sid } ) );
+				//ws.send( JSOX.stringify( { op:"register", ok:true, sid: svc.sid } ) );
 			}else {
 				console.log( "service will always exist or this wouldn't run.");
 			}
@@ -457,15 +468,16 @@ function openServer( opts, cb )
 
 	async function getService( ws, msg ) {
 		// domain, service
-		//console.log( "Calling requestservice", ws.state );
-		const svc = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
-		if( svc ) {
-			//console.log( "Service result:", svc, "for", msg );
-			svc.authorize( ws.state.user ).then( ( expect )=>{
+		console.log( "Calling requestservice", ws.state );
+		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
+		if( inst ) {
+			console.log( "Service result:", inst, "for", msg );
+			inst.authorize( msg.id, ws.state.user ).then( ( expect )=>{
 				console.log( "Expect should be most of the reply:", expect );
-				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:true, svc:expect } ) );
+				ws.send( JSOX.stringify( {op:"request", id:msg.id, name:ws.state.user.name, ok:true, svc:expect } ) );
 			} );
 		} else {
+			console.log( "Sending reply to client that we don't have a service yet?" );
 			ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, probe:true } ) );
 		}
 	}
@@ -484,6 +496,7 @@ function openServer( opts, cb )
 		if( protocol === "userDatabaseClient" ) {
 			//console.log( "send greeting message, setitng up events" );
 			ws.onmessage = handleService;
+			ws.onclose = closeService;
 			console.log( "sending service fragment" );
 			ws.send( serviceMethodMsg );
 		} else if( protocol === "admin" ){
@@ -586,6 +599,10 @@ function openServer( opts, cb )
 			
 		}
 
+		function closeService(code,reason ) {
+			
+		}
+
 		function handleService( msg_ ) {
 			//console.log( "MSG:", msg_ );
 			const msg = JSOX.parse( msg_ );
@@ -596,7 +613,7 @@ function openServer( opts, cb )
 			} else if( msg.op === "expect" ) {
 				// user connection expected on this connection...
 				//console.log( "Authorize sent - now e need to send back UID and IP")				
-				UserDb.grant( msg.rid, msg.id, msg.addr );
+				UserDb.grant( msg.id, msg.key, msg.addr );
 				//ws.send( JSOX.stringify( { op:"authorize", id:msg.id, addr:msg.addr } ) );
 
 			} else {

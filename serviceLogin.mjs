@@ -1,6 +1,6 @@
 
 import {sack} from "sack.vfs";
-//import {default as config} from "./config.jsox";
+import {default as config} from "./config.jsox";
 
 const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
 
@@ -15,7 +15,8 @@ const l = {
 
 function expectUser( ws, msg ){
 	const id = sack.Id();
-   l.expect.set( id, msg );
+	l.expect.set( id, msg );
+	console.log( "login internal service request.... " );
 	ws.send( JSOX.stringify( {op:"expect", rid:msg.id, id:id, addr:config.publicAddress } ) );
 }
 
@@ -32,8 +33,8 @@ function open( opts ) {
 			const msg = sack.JSOX.parse( msg_ );
 			if( msg.op === "addMethod" ) {
 				try {
-					var f = new AsyncFunction( "Import", msg.code );
-					const p = f.call( this, (m)=>import(m) );
+					var f = new AsyncFunction( "Import", "on", msg.code );
+					const p = f.call( this, (m)=>import(m), UserDbRemote.on );
 					p.then( ()=>{
 						this.on( "expect", msg=>expectUser(this,msg) );
 					} );
@@ -93,7 +94,7 @@ export const UserDbRemote = {
 			if( evt in l.events ) l.events[evt].push(d);
 			else l.events[evt] = [d];
 		}else {
-			if( evt in l.events ) l.events[evt].forEach( cb=>cb() );
+			if( evt in l.events ) l.events[evt].forEach( cb=>cb(d) );
 		}
 	}
 }

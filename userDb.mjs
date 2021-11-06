@@ -257,7 +257,7 @@ Organization.get = async function ( name, forClient ) {
 
 Organization.new = async function ( name, forUser ) {
 	if( !(forUser instanceof User ) ) throw new Error( "Required object User incorrect." + JSOX.strinigfy(forUser ) );
-	console.log( "Creating new" );
+	console.log( "Creating Org" );
 	const org = new Organization();
 	org.name = name;
 	org.createdBy = forUser;
@@ -269,17 +269,31 @@ Organization.new = async function ( name, forUser ) {
 
 // - - -  - - - - - - - -  -- - - - - - - ---  -- - - - - - - - - - -  -- - - - - -- -
 
-class StoredDomain{
+class StoredDomain extends StoredObject {
 	domain = new Domain();
+
+	loaded(a,b) {
+		console.log( " STORED DOMAIN FIX ", this)
+		try {
+		super.loaded(a,b);
+
+		for( let s in this.services ) {
+			s.fixup();
+		}
+	}catch(err) {
+		console.log( "Something?", err );
+	}
+	}
 }
 
 function domainFromJSOX(field,val) {
 	if( !field ) {
-		this.services.forEach( service=>service.set( this ) );
+		console.log( "this?", this );
+		this.domain.services.forEach( service=>service.set( this ) );
 		return this.domain;
 	}
 	// possible redirection of arrays and members...
-	return this.domain[field] = val;
+	return (this.domain[field] = val),undefined;
 }
 
 
@@ -299,6 +313,7 @@ export class Domain  extends StoredObject{
 		if( name ) {
 			this.domainId = sack.Id();
 			this.name = name;
+			if( !forUser ) throw new Error( "Need a user" );
 			this.createdBy = forUser;
 		}
 		return this;
@@ -347,17 +362,19 @@ export class Domain  extends StoredObject{
 			}
 			return( srvc.name===name );
 		} );
-		console.log( "blah?", srvc );
+		console.log( "domain.getservice result blah?", srvc );
 		if( !srvc ) {
 			if( !promises.length) {
 				const newSrvc = new Service().set( this, name, forUser );
 				UserDb.on( "newService", newSrvc );
 				this.services.push( newSrvc );
-				this.store();
+				console.log( "THIS SHOULD BE STORED AND UPDATED WITH SERVICES", this)
+				this.store().then( (a)=>{console.log( "Stored this service finally ************", this); return  a } );			
 				return newSrvc;
 			}
 			return Promise.all( promises ).then( ()=>foundSrvc );
 		}
+
 		return srvc;				
 	}
 }
@@ -394,9 +411,7 @@ class ServiceInstance {
 	#service = null;
 	//#connections = [];
 	#ws = null;  // one connection per instance
-	constructor() {
-
-	}
+	constructor() { }
 	get service() {
 		return this.#service;
 	}
@@ -410,30 +425,47 @@ class ServiceInstance {
 		}else
 			this.#service = s;
 	}
-	set(  ){
-		this.sid = sack.Id();
+	async authorize( rid, forUser ) {
+		const inst = this;
+		console.log( "inst:", inst, forUser );
+		console.log( "have to send something to a instance ...., to get it to accept, and get user info" );
+		const permissions = await forUser.getSash( this.#service.domain );
+		console.log( "permissions:", permissions );
+
+		const id = sack.Id();
+		
+		const msg = { op:"expect", id:id, name:forUser.name, sash:permissions, UID: sack.id(forUser.userId+"@"+this.#service.domain) };
+		inst.send( msg );
+		
+		return new Promise( (res,rej)=>{
+			l.authorizing.set( id, {res:res,rej:rej, rid:rid } );
+		} );
+
+	}
+	set( sid ){
+		const oldSid = this.sid;
+		this.sid = sid || sack.Id();
+		console.log( "Setting ID:", oldSid, this.sid );
+		console.trace( "New ID", this.sid);
+		this.#service.setInstance( oldSid, this.sid );
+		return this;
 	}
 	send(msg) {
 		if( "string" !== typeof msg ) msg = JSOX.stringify( msg );
+		console.log( "asdf", msg );
 		this.#ws.send(msg);
 	}
 	connect( ws ) {
-		//console.log( "Setting websocket:", ws );
+		// being allocated/connected in a service so it's not set yet
+		//if( this.#service )
+		//	this.#service.setInstance( this.sid, sid );
+		//if( this.sid && sid !== this.sid ) console.log( "DIfferent SID", sid, this.sid );
+		//this.sid = sid;
+		//console.trace( "Setting websocket:", ws );
 		this.#ws = ws;
+		console.trace( "---- Finally finish the connection for ws->inst tracking");
+		ws.send( JSOX.stringify( { op:"register", ok:true, sid: this.sid } ) );
 		return;
-	}
-}
-
-class ServiceConnection {
-	ws = null;
-	service = null;
-	constructor( ws, service ) {
-		this.ws = ws;
-		this.service = service;
-	}
-
-	request( forUser ) {
-		this.ws.send( JSOX.stringify( {op:"expect", user:u8xor(forUser.clientId,svcId )}))
 	}
 }
 
@@ -445,6 +477,7 @@ export class Service  extends StoredObject{
 	masterSash = null;
 	defaultSash = null;//new Sash();
 	instances = []; // allocated service identifiers
+	#active_instances = []; // allocated service identifiers
 	#domain = null;
 	#instances = []; // actively tracked services... 
 	constructor() {
@@ -454,6 +487,7 @@ export class Service  extends StoredObject{
 	set( domain, name, forUser ) {
 		this.#domain = domain;
 		if( name ) {			
+			console.log( "This is creating a new sash; so it is able to set the service")
 			this.masterSash = new Sash().set( this, "Master:" +name+"@"+domain.name, true );
 			this.defaultSash = new Sash().set( this, "Default:" +name+"@"+domain.name );
 			this.createdBy = forUser;
@@ -461,6 +495,16 @@ export class Service  extends StoredObject{
 			this.serviceId = sack.Id();
 		}
 		return this;
+	}
+	fixup() {
+		console.log( "Fixing sash internal relation");
+		this.masterSash.set( this );
+		this.defaultSash.set( this );
+	}
+	loaded( a, b ) {
+	
+		super.loaded(a,b);
+		console.log( "reloaded? fix sashes?", this )
 	}
 	async store() {
 		await super.store();
@@ -483,44 +527,73 @@ export class Service  extends StoredObject{
 	}
 
 	async authorize( forUser ) {
-		const i = Math.floor(Math.random()*this.#instances.length);
-		if( i || this.#instances.length > i ) {
-			const inst = this.#instances[i];
-			console.log( "inst:", inst );
-			console.log( "have to send something to a instance ...., to get it to accept, and get user info" );
-			const permissions = await forUser.getSash( this.domain );
-			console.log( "permissions:", permissions );
-
-				const id = sack.Id();
-			
-			const msg = { op:"expect", id:id, name:forUser.name, sash:permissions, UID: sack.id(forUser.userId+"@"+this.domain) };
-			inst.send( msg );
-			
-			return new Promise( (res,rej)=>{
-				l.authorizing.set( id, {res:res,rej:rej} );
-			} );
+		const i = Math.floor(Math.random()*this.#active_instances.length);
+		if( this.#active_instances.length > i ) {
+			const inst = this.#active_instances[i];
+			return inst.authorize( forUser );
 		}
 	}
 
-	getInstance( sid ) {
-		console.log( "Getting instance:", sid );
+	getConnectedInstance( ) {
+		console.trace( "Okay this has to look at pending, and connected instances");
+		const i = Math.floor(Math.random()*this.#active_instances.length);
+		if( this.#active_instances.length > i ) {
+			const inst = this.#active_instances[i];
+			console.log( "Found an active instance to return:", inst );
+			return inst;//.authorize( forUser );
+		}
+		{
+			console.log( "Other instances?", this.#instances, this.#active_instances );
+		}
+	}
+
+	getServiceInstance( sid ) {
+		console.trace( "Getting instance:", sid );
 		if( !sid ) {
-			console.log( "Probably returned nothing?" );
+			console.log( "Just getting any instance.... (overlapped function)")
+			if( !this.#instances.length ) {
+				console.log( "Nothing to choose.... while this is a path we're already live");
+			}
+			// return one of the instances of this service.
+			const i = Math.floor(Math.random()*this.#instances.length);
+			const inst = this.#instances[i];
+			console.log( "Probably returned nothing?", inst );
+			return inst;
 		} else {
-			for( let inst of this.instances ) {
-				if( inst.side === sid ) {
-					if( !inst.connected )
+			console.log( "this has instances?", this.instances, this.#instances );
+			for( let i = 0; i < this.instances.length; i++ ) {
+			//for( let inst of this.instances ) {
+				const inst = this.instances[i];
+				console.log( "Found match?" , inst, sid );
+				if( inst === sid ) {
+					console.log( "Found match?" );
+					if( this.#instances[i]){
+						console.log( "service is already connected, fault");
+						return this.#instances[i];
+					}else {
+						const inst = new ServiceInstance( );
+						inst.service = this;
+						console.log( "Get active service intance");
+						inst.set( sid ).connect( ws );
+						this.instances.push( inst.sid );
+						this.#active_instances.push(inst );
+						this.#instances.push( inst );
+						this.store();
 						return inst;
+					}
 				}
 			}
 		}
 	}
 
-	addInstance() {
+	addInstance(ws) {
+		if( !ws ) throw new Error( "Instances need a socket." );
+		console.trace( "ADDING A INSTANCE for socket:", ws );
 		const inst = new ServiceInstance( );
-		inst.sid = sack.Id();
 		inst.service = this;
+		inst.set().connect( ws );
 		this.instances.push( inst.sid );
+		this.#active_instances.push(inst );
 		this.#instances.push( inst );
 		this.store();
 		return inst;
@@ -528,6 +601,18 @@ export class Service  extends StoredObject{
 
 	addInstance_( inst ) {
 		this.#instances.push( inst );
+	}
+	setInstance( oldsid, sid )
+	{
+		if( oldsid ) {
+			const oldid = this.instances.find( n=>n===oldsid );
+			if( oldid >= 0 ) {
+				this.instances[oldid]=sid;
+			}		
+			else {
+				throw new Error( "Failed to find old ID");
+			}
+		}
 	}
 
 	async makeBadges( badges, forUser ) {
@@ -650,11 +735,12 @@ export class User  extends StoredObject{
 		const badges = {};
 		const found = [];
 		this.sashes.forEach( sash=>{
-			
+			console.log( "Sash is incomplete?", sash)
 			if( sash.for( domain ) )
 				found.push(sash);
 		} );
 		let sash = null;
+		console.log( "Found?", found, this, this.sashses, domain );
 		if( !found.length ) {
 			
 		}
@@ -663,7 +749,7 @@ export class User  extends StoredObject{
 			sash = await UserDb.on( "pickSash", this, found );
 			
 		}else sash = found[0];
-
+		if( sash )
 		for( let badge of sash.badges ) {
 			badges[badge.tag] = true;
 		} 
@@ -904,10 +990,11 @@ const UserDb = {
 	UniqueIdentifier:UniqueIdentifier,
 
 	// register a service... this essentially blocs 
-	async getService( service ) {
+	async getService( ws, service ) {
+		//console.trace( "GET service:", ws, service );
 		const org = await Organization.get( service.org );
 		if( !org ) {
-			const reg = { p:null, res:null,rej:null,msg:service };
+			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;
 			} );
@@ -925,6 +1012,9 @@ const UserDb = {
 			// this returns a service instance....
 			return dmn.addService( service.service );
 		}
+
+
+		console.log( "Resulting with service" );
 		return oldService;
 	},
 	async requestService( domain, service, forUser ) {
@@ -948,26 +1038,33 @@ const UserDb = {
 						//console.log( "Got service:", svc );
 						const badges = await svc.makeBadges( reg.badges, forUser );
 
+						const inst = svc.addInstance( regPending.ws );
 						// resolve the registration
-						regPending.res( svc.addInstance() );
+						regPending.res( svc );
 						l.registrations.splice( r, 1 );
 
-						console.log( 'authorize...', svc, stringifier.stringify( org ) );
+						//console.log( 'authorize...', svc, stringifier.stringify( org ) );
 						// radio the service ahead of time, allowing the service to setup for the user
 						// gets back a connection token and address...
 						//const redirect = svc.authorize( forUser );
-						return svc;
+						return inst;
 					}
 				}
 			}
-			console.log( "Failed to find service...", domain, service );
+			console.trace( "Failed to find service...", domain, service );
 			return undefined;
-		} 
-		return oldService;
+		} else {
+			// it might still be pending registration....
+			console.log( 'already exists, but registrations:', l.registrations );
+		}
+		//return oldService;
+		const inst = oldService.getConnectedInstance();
+		console.log( "forUser", forUser );
+		return inst;
 	},
 
 	async grant( id, key, addr ) {
-			const auth = l.authorizing.get( id );
+		const auth = l.authorizing.get( id );
 		if( auth ) {
 			auth.res( {key:key,addr:addr} );
 		} else {

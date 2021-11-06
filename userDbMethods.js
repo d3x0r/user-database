@@ -76,7 +76,7 @@ ws.processMessage = function( ws, msg ) {
 		if( msg.success )
 			;//Alert(" Login Success" );
 		else if( msg.ban ) {
-			//Alert( "Bannable Offense" );
+			Alert( "Bannable Offense" );
 			localStorage.removeItem( "clientId" ); // reset this
 			ws.close();
 		} else if( msg.device ) {
@@ -86,15 +86,16 @@ ws.processMessage = function( ws, msg ) {
 			ws.send( JSON.stringify( {op:"device", deviceId:newId } ) );
 			return true;
 		} else
-			;//Alert( "Login Failed..." );		
+			Alert( "Login Failed..." );		
                 
         }
 	else if( msg.op === "create" ) {
 		if( msg.success ) {
-			;//Alert(" Login Success" );
-         localStorage.setItem( "deviceId", msg.deviceId );
+			//Alert(" Login Success" );
+			
+         	localStorage.setItem( "deviceId", msg.deviceId );
 		} else if( msg.ban )  {
-			//Alert( "Bannable Offense" );
+			Alert( "Bannable Offense" );
 			localStorage.removeItem( "clientId" ); // reset this
 			ws.close();
 		} else if( msg.device ) {
@@ -104,7 +105,7 @@ ws.processMessage = function( ws, msg ) {
 			ws.send( JSON.stringify( {op:"device", deviceId:newId } ) );
 			return true;
 		} else
-			;//Alert( "Login Failed..." );		
+			Alert( "Login Failed..." );		
                 
         }
         else if( msg.op === "set" ) {
@@ -115,7 +116,7 @@ ws.processMessage = function( ws, msg ) {
 		if( msg.success ) {
 			;//Alert(" Login Success" );
 		} else
-			;//Alert( "Login Failed..." );		
+			Alert( "Login Failed..." );		
                 
         }
         else if( msg.op === "set" ) {
@@ -126,9 +127,15 @@ ws.processMessage = function( ws, msg ) {
 		// this is actually a client event.
 	}
 	else if( msg.op === "request" ) {
+		// reply from server
 		for( let pend of l.pending ) {
 			if( pend.id === msg.id ) {
-				pend.res( msg.svc );
+				if( msg.ok ) {
+					console.log( "Got resolved service:", msg, msg.svc );
+					pend.res( {svc:msg.svc, name:msg.name} ); // return my user name also... (account login doesn't know)
+				}else {
+					if( msg.probe ) Alert( "Probe for services detected");
+				}
 			}
 		}
 	}

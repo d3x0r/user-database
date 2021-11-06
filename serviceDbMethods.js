@@ -53,10 +53,9 @@ ws.addService = function( prod,app,interface ) {
 function registered( ws,msg ) {
 	if( msg.ok ) {
 		// srvc result ok?
+		console.trace( "did I get SID?", msg, disk );
 		mySID = msg.sid;
 		disk.write( "mySid.jsox", msg.sid );
-
-		
 	} else {
 		console.log( "Failed to register Self" );
 	}
@@ -69,11 +68,13 @@ function acceptUser( ws, msg ) {
 const events = {};
 
 ws.on = function( evt, d ) {
+	return on( evt, d );
 	if( "function" === typeof d ) {
         	if( evt in events ) events[evt].push( d );
                 else events[evt] = [d];
         } else {
         	if( evt in events ) for( let cb of events[evt] ) cb( d );
+			else console.log(" No handler registered for:", evt );
         }
 }
 
@@ -83,7 +84,10 @@ ws.processMessage = function( msg ) {
 		registered( ws, msg );
 		return true;
 	} else if( msg.op === "expect" ) {
-        	ws.on( "expect", msg );
+        ws.send( JSOX.stringify( {op:'expect', id:msg.id
+						, addr:"this service's address?"
+						, key:on( "expect", msg ) } ) );
+		return true;
 	} else if( msg.op === "authorize" ) {
 		// this has to be handled outside of this code
 		// otherwise need to register event handler
