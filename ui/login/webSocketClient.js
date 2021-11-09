@@ -291,7 +291,7 @@ async function openSocket( addr, cb, protocol ) {
 	
 
 	const  proto = "wss:";//location.protocol==="http:"?"ws:":"wss:";
-
+	if( workerInterface )
         workerInterface.connect( proto+"//"+addr+"/", protocol|| "login", (statusmsg, msg)=>{
 		if( statusmsg === true ) {
 			if( cb ) cb(msg);
