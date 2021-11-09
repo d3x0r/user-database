@@ -85,7 +85,8 @@ navigator.serviceWorker.register('../swbundle.js', { scope: '/ui/' }).then(funct
     });
 
 navigator.serviceWorker.ready.then( registration => {
-	//console.log( "THIS IS READY?" );
+	// do I ever actually get ready? or does reg just become active?
+	console.log( "THIS IS READY?" );
 	l.reg = registration;
         if( !l.worker ) {
 		l.worker = l.reg.active;
@@ -249,17 +250,17 @@ function handleMessage( event ) {
 }
 
 function connect( address, protocol, cb, onMsg ) {
-	console.log( "Connect:", l.worker );
+	//console.log( "Connect:", l.worker );
 	if( !l.worker )  {
 		// queue for when the worker really exists.
 		l.connects.push( { cb: cb, onMsg:onMsg, msg: {op:"connect", protocol:protocol, address:address } } );
-		console.log( "pushed connection to pending connect..." );
+		//console.log( "pushed connection to pending connect..." );
 	} else {
 		console.log( "able to go now..." );
 		l.worker.postMessage( {op:"connect", protocol:protocol, address:address } ); 	
 		l.connects.push( { cb: cb, onMsg:onMsg, msg:null } );
 	}
-	console.log( "Connect called...", l.connects );
+	//console.log( "Connect called...", l.connects );
 }
 
 

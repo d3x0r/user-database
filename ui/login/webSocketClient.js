@@ -9,7 +9,7 @@
 //const origin = "https://d3x0r.org:8089"
 
 const here = new URL( import.meta.url );
-console.log( "Origin? Meta?", location, import.meta, here );
+//console.log( "Origin? Meta?", location, import.meta, here );
 
 import {popups,AlertForm} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
@@ -298,8 +298,10 @@ async function openSocket( addr, cb, protocol ) {
         workerInterface.connect( proto+"//"+addr+"/", protocol|| "login", (statusmsg, msg)=>{
 		if( statusmsg === true ) {
 			if( cb ) cb(msg);
-			else if( "object" === typeof msg ){ res( msg );
-				console.log( "resolved with msg..." );
+			else if( "object" === typeof msg ){ 
+				// msg is a websocket-like object
+				res( msg );
+				//console.log( "resolved with msg..." );
 			}else console.log( "Dropped message:", msg );
 			l.ws = msg;
 			//console.log( "is websocket?", msg );
