@@ -13,7 +13,9 @@ const disk = sack.Volume();
 // my path is poorly defined here...
 const srvc = disk.exists( "service.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( "service.jsox" ) );
 if( srvc ) srvc.badges = srvc && disk.exists( "badges.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( "badges.jsox" ) );
-let mySID = srvc.badges && disk.exists( "mySid.jsox" ) && sack.Volume.readAsString( "mySid.jsox" );
+let mySID = srvc.badges 
+		&& ( ( disk.exists( "fs/mySid.jsox" ) && sack.Volume.readAsString( "fs/mySid.jsox" ) )
+		   || ( disk.exists( "mySid.jsox" ) && sack.Volume.readAsString( "mySid.jsox" ) ) );
 
 if( !srvc ) {
 	console.log( "Service definition not found..." );
@@ -54,7 +56,7 @@ function registered( ws,msg ) {
 	if( msg.ok ) {
 		// srvc result ok?
 		mySID = msg.sid;
-		disk.write( "mySid.jsox", msg.sid );
+		disk.write( "fs/mySid.jsox", msg.sid );
 
 		
 	} else {

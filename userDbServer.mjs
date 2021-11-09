@@ -40,7 +40,7 @@ if(0)
 const JSOX = sack.JSOX;
 import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
 
-const storage = sack.ObjectStorage( "data.os" );
+const storage = sack.ObjectStorage( "fs/data.os" );
 UserDb.hook( storage );
 
 const methods = sack.Volume().read( nearPath+"userDbMethods.js" ).toString();
@@ -95,10 +95,12 @@ const resourcePerms = {
 
 // go is from userDb; waits for database to be ready.
 if( withLoader ) go.then( ()=>{
-        openServer( { port : Number(process.argv[2])||8089 
-			, cert : nativeDisk.read( config.certPath + "/cert.pem" ).toString()
+        openServer( config.certPath?{ port : Number(process.argv[2])||8089 
+			, cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
 			, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
 			, ca : nativeDisk.read( config.certPath + "/fullchain.pem" ).toString()
+			}
+		:{ port : Number(process.argv[2])||8089 
 			} );
 } );
 else {
@@ -148,6 +150,8 @@ function openServer( opts, cb )
 		};
 		const parts = req_url.split( '/' );
 		if( parts.length < 3 ) {
+	console.log( "asfddsafadsf:", req_url, req.url );
+			if( req_url !== '/socket-service-swbundle.js' )  {
 				if( parts[1] === "serviceLogin.mjs" || parts[1] === "serviceLogin.js" ) {
                                 	res.code = 200;
                                         res.headers["Content-Type"] = "text/javascript";
@@ -161,9 +165,10 @@ function openServer( opts, cb )
 					return res;
 				}
                                 
-			res.code = 301;
-                        res.headers = { Location:"/ui/profile/" };
-			return res;
+				res.code = 301;
+        	                res.headers = { Location:"/ui/profile/" };
+				return res;
+			}
 		}
 		if( parts[1] === "node_modules" ) {
 			if( parts[2] !== "@d3x0r" && parts[2] !== "jsox" ) {
@@ -198,7 +203,8 @@ function openServer( opts, cb )
 		if( parts[parts.length-1] == "" ) parts[parts.length-1] = "index.html";
 
 
-		const filePath =  unescape(parts.join("/"));
+		let filePath =  unescape(parts.join("/"));
+		if( req.url === '/socket-service-swbundle.js' ) filePath = 'node_modules/@d3x0r/socket-service/swbundle.js'
 		const extensions = path.extname(parts[parts.length-1]).split('.');
 		//extensions.splice(0,1);
 		const extname = extensions[extensions.length-1];
