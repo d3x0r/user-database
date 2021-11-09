@@ -1,0 +1,11 @@
+
+FROM d3x0r/node-alpine-run as d3x0r-node-alpine
+WORKDIR /app
+VOLUME fs
+
+copy . .
+#RUN yarn install --production
+CMD ["node", "--inspect=0.0.0.0:9229", "--experimental-loader=sack.vfs/import.mjs", "userDbServer.mjs", "5000"]
+EXPOSE 5000
+EXPOSE 9229
+#CMD ["node"]
