@@ -131,7 +131,7 @@ function openServer( opts, cb )
 	const disk = sack.Volume();
 	console.log( "serving on " + serverOpts.port );
 
-	UserDbRemote.open( { server:"wss://localhost:"+serverOpts.port } );
+	UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port } );
 
 	//console.table( disk.dir() );
 
