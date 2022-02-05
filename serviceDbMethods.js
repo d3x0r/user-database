@@ -23,8 +23,8 @@ if( !srvc ) {
 else if( !srvc.badges ) {
 	console.log( "Badge definition not found for oranization..." );
 }
-//const SaltyRNGModule = await Import( "/javascript/d3x0r/srg/salty_random_generator.js" );
-const SaltyRNG = sack.SaltyRNG;
+const SaltyRNGModule = await Import( "@d3x0r/srg2" );
+const SaltyRNG = SaltyRNGModule.SaltyRNG;
 
 const l = {
 	badges : [],
@@ -71,13 +71,6 @@ const events = {};
 
 ws.on = function( evt, d ) {
 	return on( evt, d );
-	if( "function" === typeof d ) {
-        	if( evt in events ) events[evt].push( d );
-                else events[evt] = [d];
-        } else {
-        	if( evt in events ) for( let cb of events[evt] ) cb( d );
-			else console.log(" No handler registered for:", evt );
-        }
 }
 
 ws.processMessage = function( msg ) {
@@ -86,7 +79,7 @@ ws.processMessage = function( msg ) {
 		registered( ws, msg );
 		return true;
 	} else if( msg.op === "expect" ) {
-        ws.send( JSOX.stringify( {op:'expect', id:msg.id
+	        ws.send( JSOX.stringify( {op:'expect', id:msg.id
 						, addr:"this service's address?"
 						, key:on( "expect", msg ) } ) );
 		return true;

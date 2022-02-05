@@ -242,6 +242,10 @@ function openServer( opts, cb )
 		//console.log( "accept?", ws );
 		if( ws.headers["Sec-WebSocket-Protocol"] === "login" )
 			return this.accept();
+		if( ws.headers["Sec-WebSocket-Protocol"] === "profile" )
+			return this.accept();
+		if( ws.headers["Sec-WebSocket-Protocol"] === "admin" )
+			return this.accept();
 		if( ws.headers["Sec-WebSocket-Protocol"] === "userDatabaseClient" ) {
 		const parts = ws.url.split( "?" );
 		if( parts.length > 1 ) {
@@ -288,15 +292,20 @@ function openServer( opts, cb )
 		}
 
 		const useClient = isClient || await UserDb.getIdentifier();
-
-			
+		// 👻 or 😊 
+		if( msg.user.includes( "\u{FEFF}" ) ) {
+			console.log( "Includes bad character" );
+			ws.send( JSON.stringify( { op:"guest", success: false, name:true } ));
+			return;
+		}
 		//msg.deviceId = setKey( msg.deviceId,ws,"deviceId" );
+		const name = "\u{FEFF}👻" + msg.user;
+		//console.log( "Userdb Get User with:", name );
+		const user = ( await UserDb.getUser( name ) ) || 
+				(await useClient.addUser( name, sack.Id(), sack.Id()+"@d3x0r.org", "password" ) );
 
-		const user = ( await UserDb.getUser( msg.user ) ) || 
-				(await useClient.addUser( msg.user, sack.Id(), sack.Id()+"@d3x0r.org", "password" ) );
 
-
-		console.log( "user:", user );
+		//console.log( "user:", user );
 		if( user ) {
 				sendKey( ws, "clientId", user.unique.key );
 				ws.state.user= user;
@@ -304,7 +313,7 @@ function openServer( opts, cb )
 				return;
 		}
 		//console.log( "sending false" );
-		console.log( "guest password failure" );
+		//console.log( "guest password failure" );
 		ws.send( JSON.stringify( { op:"guest", success: false } ));
 	}
 
@@ -313,12 +322,12 @@ function openServer( opts, cb )
 		const isClient = await UserDb.getIdentifier( msg.clientId );
 		// just need SOME clientID.
 		if( !isClient ) {
+			console.log( "Login could not find the client by identifer:", msg );
 			ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
 			return;
 		}
 		//console.log( "login:", msg );
 		//console.log( "client:", isClient );
-		
 
 		const user = await UserDb.getUser( msg.account );
 		
@@ -355,15 +364,25 @@ function openServer( opts, cb )
 		ws.send( JSON.stringify( { op:"login", success: true } ));
 	}
 
+	function validateUsername( n ) {
+		if( n.includes === "\u{FEFF}" ) {
+			return false;
+		}
+		return true;
+	}
+
 	async function doCreate( ws, msg ) {
-		debugger;
+		if( !validateUsername( msg.user ) ) {
+			ws.send( JSON.stringify( { op:"create", success: false, name:true } ) );
+			return;
+		}
+
 		const validEMail = await checkEmail( msg.email );
 		if( !validEMail ) {
 			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
 			return;
 		}
 		const unique = await UserDb.getIdentifier( msg.clientId );//new UniqueIdentifier();
-		//console.log( "unique:", unique, msg  );
 		if( !unique ) {                              
 			//console.log( "Resulting with a reset of client ID." );
 			ws.send( JSON.stringify( { op:"create", success: false, ban: true } ) );
@@ -381,11 +400,10 @@ function openServer( opts, cb )
 			return;
 		}
 
-
-
 		const user = await unique.addUser( msg.user, msg.account, msg.email, msg.password );
-		console.log( "user created:", user );
+		//console.log( "user created:", user );
 		ws.state.user= user;
+		ws.state.user.authorize = true;
 		// ask the client for a device id
 		ws.send( JSON.stringify( {op:"create", success:false, device:true } ) );
 	}
@@ -401,7 +419,7 @@ function openServer( opts, cb )
 			}
 			ws.send( JSON.stringify( { op:"login", success: true } ));
 		} else {
-			console.log( "Bannable failure." );
+			console.log( "User Adding device was not found?? Bannable failure.", ws.state );
 			// out of sequence - there should be a pending login in need of a device ID.
 			ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
 		}
@@ -435,14 +453,15 @@ function openServer( opts, cb )
 		// msg.org is 'org.jsox' from the client
 		// sid is the last SID we assigned.
 		if( msg.sid ) {
-            console.log( "service is asking to reconnect...", msg.sid );
+			console.log( "service is asking to reconnect...", msg.sid );
 			// this will wait until a client asks for this service; even on reconnect
 			const srvc = await UserDb.getService( ws, msg.svc );
-			console.log( "Service:", srvc );
-			const inst = srvc.getServiceInstance( msg.sid );
-			if( inst )
+			//console.log( "Service:", srvc );
+			const inst = srvc.getServiceInstance( msg.sid, ws );
+			if( inst ){
+				console.log( "This is connecting the socket to the active instance..." );
 				inst.connect( ws );		
-			else {
+			} else {
 				console.log(" THis is adding a new instance for that service; BAD id recovery");
 				srvc.addInstance( ws); // does connect also.
 				//inst.connect( ws );
@@ -453,14 +472,14 @@ function openServer( opts, cb )
          	console.log( "otherwise find the service (post reg)", msg );
 			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
 				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
-				s = s.addInstance( ws );
+				//s = s.addInstance( ws );
 				//s.connect( ws );
 				//ws.send( JSOX.stringify( { op:"registered" }) )
 				return s;
 			} );
-			if( svc ) {
+			if( svcInst ) {
 				// register service finally gets a result... and sends my response.
-				console.log( "Service resulted, and is an instance?", svc );
+				console.log( "Service resulted, and is an instance?", svcInst );
 				//ws.send( JSOX.stringify( { op:"register", ok:true, sid: svc.sid } ) );
 			}else {
 				console.log( "service will always exist or this wouldn't run.");
@@ -474,16 +493,16 @@ function openServer( opts, cb )
 
 	async function getService( ws, msg ) {
 		// domain, service
-		console.log( "Calling requestservice", ws.state );
+		//console.log( "Calling requestservice", ws.state );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
 		if( inst ) {
-			console.log( "Service result:", inst, "for", msg );
+			//console.log( "Service result:", inst, "for", msg );
 			inst.authorize( msg.id, ws.state.user ).then( ( expect )=>{
-				console.log( "Expect should be most of the reply:", expect );
+				//console.log( "Expect should be most of the reply:", expect );
 				ws.send( JSOX.stringify( {op:"request", id:msg.id, name:ws.state.user.name, ok:true, svc:expect } ) );
 			} );
 		} else {
-			console.log( "Sending reply to client that we don't have a service yet?" );
+			//console.log( "Sending reply to client that we don't have a service yet?" );
 			ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, probe:true } ) );
 		}
 	}
@@ -629,7 +648,7 @@ function openServer( opts, cb )
 
 		function handleClient( msg_ ) {
 			const msg = JSOX.parse( msg_ );
-			//console.log( 'message:', msg );
+			//console.log( 'UserDbServer message:', msg );
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );

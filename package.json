@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "go": "node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs",
-    "gdb": "gdb --args node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs"
+    "gdb": "gdb --args node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs",
+    "link": "npm link @d3x0r/bloomnhash @d3x0r/srg2 @d3x0r/popups @d3x0r/socket-service @d3x0r/slab-array jsox sack.vfs"
   },
   "repository": {
     "type": "git",
@@ -27,7 +28,7 @@
     "@d3x0r/popups": "latest",
     "@d3x0r/socket-service": "latest",
     "@d3x0r/slab-array": "latest",
-    "@d3x0r/srg": "^1.2.0",
+    "@d3x0r/srg2": "^1.0.0",
     "jsox": "latest",
     "sack.vfs": "latest"
   }

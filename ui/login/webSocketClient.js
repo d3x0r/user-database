@@ -28,6 +28,13 @@ const importing = import( here.origin+"/node_modules/@d3x0r/socket-service/swc.j
 let isGuestLogin = false;
 let createMode = false;
 
+const towers = [location.protocol.replace( "http", "ws" )+"//"+location.host +"/",
+		"wss://d3x0r.org:8089/",
+		"wss://poopfixer.com:8089/", 
+
+];
+
+
 // loginForm = {
 //     connect() {
 //     },
@@ -173,7 +180,12 @@ const l = {
 					}
 						
 				   } else {
-					l.ws.doLogin( userField.value, passField.value );
+					if(l.ws.doLogin )
+						l.ws.doLogin( userField.value, passField.value );
+					else{
+						if( !alertForm ) alertForm = new AlertForm();
+						alertForm.show( "Login is not ready..." );
+					}
 				}
 			}
 		} 
@@ -285,32 +297,40 @@ async function 	pickSash( ws, choices ){
 	ws.send( {op:"pickSash", ok:false, sash : "Choice not possible." } );
 }
 
+
+
 async function openSocket( addr, cb, protocol ) {
 	if( !workerInterface )  {
 		await importing
 	}
 	return new Promise( (res,rej)=>{
-	addr = addr || "d3x0r.org:8089" || location.host;
+		
+		let index = 0;
+		tryOne( towers[index] );
+		function tryOne( addr ){
+			//addr = addr || "wssd3x0r.org:8089" || location.host;
 	
 
-	const  proto = "wss:";//location.protocol==="http:"?"ws:":"wss:";
-	if( workerInterface )
-        workerInterface.connect( proto+"//"+addr+"/", protocol|| "login", (statusmsg, msg)=>{
-		if( statusmsg === true ) {
-			if( cb ) cb(msg);
-			else if( "object" === typeof msg ){ 
-				// msg is a websocket-like object
-				res( msg );
-				//console.log( "resolved with msg..." );
-			}else console.log( "Dropped message:", msg );
-			l.ws = msg;
-			//console.log( "is websocket?", msg );
-
-		}else {
-			console.log( "connect got:", statusmsg );
-		}
-	}, processMessage );
-
+			if( workerInterface )
+                        workerInterface.connect( addr, protocol|| "login", (statusmsg, msg)=>{
+				if( statusmsg === true ) {
+					if( cb ) cb(msg);
+					else if( "object" === typeof msg ){ 
+						// msg is a websocket-like object
+						res( msg );
+						//console.log( "resolved with msg..." );
+					} else {
+						console.log( "Dropped message:", msg );
+					}
+					l.ws = msg;
+					//console.log( "is websocket?", msg );
+                
+				}else {
+					console.log( "!!!(NEXTSERVER?)connect got:", statusmsg );
+				}
+			}, processMessage );
+                }
+		
 	} );
 }
 

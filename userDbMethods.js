@@ -2,7 +2,7 @@
 const ws = this;
 console.log( "Extend this websocket:", this );
 
-const SaltyRNGModule = await Import( "/node_modules/@d3x0r/srg/salty_random_generator.js" );
+const SaltyRNGModule = await Import( "/node_modules/@d3x0r/srg2/salty_random_generator2.mjs" );
 const SaltyRNG = SaltyRNGModule.SaltyRNG;
 //ws.SaltyRNG = SaltyRNG;
 
@@ -78,7 +78,7 @@ ws.processMessage = function( ws, msg ) {
 		else if( msg.ban ) {
 			Alert( "Bannable Offense" );
 			localStorage.removeItem( "clientId" ); // reset this
-			ws.close();
+			ws.close( 1000, "Client respecting ban, and resetting" );
 		} else if( msg.device ) {
 			//temporary failure, this device was unidentified, or someone elses
 			const newId = SaltyRNG.Id();
@@ -97,7 +97,7 @@ ws.processMessage = function( ws, msg ) {
 		} else if( msg.ban )  {
 			Alert( "Bannable Offense" );
 			localStorage.removeItem( "clientId" ); // reset this
-			ws.close();
+			ws.close( 1000, "Create count respecting ban, resetting" );
 		} else if( msg.device ) {
 			//temporary failure, this device was unidentified, or someone elses
 			const newId = SaltyRNG.Id();

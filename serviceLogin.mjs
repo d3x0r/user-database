@@ -16,8 +16,8 @@ const l = {
 function expectUser( ws, msg ){
 	const id = sack.Id();
 	l.expect.set( id, msg );
-	console.log( "login internal service request.... " );
-	ws.send( JSOX.stringify( {op:"expect", rid:msg.id, id:id, addr:config.publicAddress } ) );
+	console.log( "login internal service request.... ", id );
+	return id;
 }
 
 function open( opts ) {
@@ -94,7 +94,7 @@ export const UserDbRemote = {
 			if( evt in l.events ) l.events[evt].push(d);
 			else l.events[evt] = [d];
 		}else {
-			if( evt in l.events ) l.events[evt].forEach( cb=>cb(d) );
+			if( evt in l.events ) for( let cb of l.events[evt] ) { const r = cb(d); if(r) return r; }
 		}
 	}
 }
