@@ -52,6 +52,8 @@ const serviceMethodMsg = JSON.stringify( {op:"addMethod", code:serviceMethods} )
 const serviceLoginScript = sack.Volume().read( nearPath+"serviceLogin.mjs" ).toString();
 
 import {UserDbRemote} from "./serviceLogin.mjs";
+
+
 //import {UserDbServer} from "./userDbLoginService.mjs";
 //const methodMsg = JSON.stringify( {op:"addMethod", code:methods} );
 
@@ -131,6 +133,7 @@ function openServer( opts, cb )
 	const disk = sack.Volume();
 	console.log( "serving on " + serverOpts.port );
 
+	// this connects my own service to me...
 	UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port } );
 
 	//console.table( disk.dir() );
@@ -144,13 +147,13 @@ function openServer( opts, cb )
 
 	function getResource( req_url, req, user ) {
 		const res = {
-			code: 404
-			, content : null
-            , headers : { 'Content-Type': "text/html" },
+		     code: 404
+		     , content : null
+		     , headers : { 'Content-Type': "text/html" },
 		};
 		const parts = req_url.split( '/' );
 		if( parts.length < 3 ) {
-	console.log( "asfddsafadsf:", req_url, req.url );
+			console.log( "asfddsafadsf:", req_url, req.url );
 			if( req_url !== '/socket-service-swbundle.js' )  {
 				if( parts[1] === "serviceLogin.mjs" || parts[1] === "serviceLogin.js" ) {
                                 	res.code = 200;
@@ -164,7 +167,7 @@ function openServer( opts, cb )
 					console.log( "Service login script." );
 					return res;
 				}
-                                
+                                // redirect
 				res.code = 301;
         	                res.headers = { Location:"/ui/profile/" };
 				return res;
@@ -239,24 +242,27 @@ function openServer( opts, cb )
 	} ;
 
 	server.onaccept = function ( ws ) {
+		const protocol = ws.headers["Sec-WebSocket-Protocol"];
+
 		//console.log( "accept?", ws );
-		if( ws.headers["Sec-WebSocket-Protocol"] === "login" )
+		if( protocol === "login" )
 			return this.accept();
-		if( ws.headers["Sec-WebSocket-Protocol"] === "profile" )
+		if( protocol === "profile" )
 			return this.accept();
-		if( ws.headers["Sec-WebSocket-Protocol"] === "admin" )
+		if( protocol === "admin" )
 			return this.accept();
-		if( ws.headers["Sec-WebSocket-Protocol"] === "userDatabaseClient" ) {
-		const parts = ws.url.split( "?" );
-		if( parts.length > 1 ) {
-			const sid = parts[parts.length-1];
-			const service = l.services.get(sid);
-			if( service ) {
+		if( protocol === "userDatabaseClient" ) {
+			const parts = ws.url.split( "?" );
+			if( parts.length > 1 ) {
+				const sid = parts[parts.length-1];
+				// this connects to a service by identifier.
+				const service = l.services.get(sid);
+				if( service ) {
+					return this.accept();
+				} // otherwise it's an invalid connection... 		
+			}
+			else
 				return this.accept();
-			} // otherwise it's an invalid connection... 		
-		}
-		else
-			return this.accept();
 		}
 
 		this.reject();
@@ -340,7 +346,7 @@ function openServer( opts, cb )
 			//msg.deviceId = null; // force generate new device for reversion
 		}
 
-		console.log( "user:", user, msg.password );
+		//console.log( "user:", user, msg.password );
 		if( !user || user.pass !== msg.password ) {
 			ws.send( JSON.stringify( { op:"login", success: false } ) );
 			return;
