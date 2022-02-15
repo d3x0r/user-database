@@ -545,7 +545,14 @@ function openServer( opts, cb )
 
 		function handlePeer( msg_ ) {
 			const msg = JSOX.parse( msg_ );
-			if( msg.op === "" ) {
+			if( msg.op === "getIndexes" ) {
+				const indexes = UserDb.getIndexes();
+				ws.send( {op:"indexes:", ids:indexes.ids } );
+	
+			} else if( msg.op === "getIndexes" ) {
+				const indexes = UserDb.getIndexes();
+				ws.send( {op:"indexes:", ids:indexes.ids } );
+	
 			}
 			
 		}

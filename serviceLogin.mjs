@@ -35,6 +35,7 @@ function open( opts ) {
 				try {
 					var f = new AsyncFunction( "Import", "on", msg.code );
 					const p = f.call( this, (m)=>import(m), UserDbRemote.on );
+					if( opts.connect ) opts.connect( this );
 					p.then( ()=>{
 						this.on( "expect", msg=>expectUser(this,msg) );
 					} );
@@ -49,7 +50,8 @@ function open( opts ) {
 						opts.authorize( msg.user );
 					}
 					else {
-						console.log( "unknown message Received:", msg );
+						if( opts.processMessage && !this.processMessage( ws, msg, msg_ ) )
+							console.log( "unknown message Received:", msg );
 					}
 				}
 			}
@@ -67,7 +69,7 @@ function open( opts ) {
 	client.on( "close", function( msg ) {
       		console.log( "unopened connection closed" );
 	} );
-
+	return client;
 } 
 
 
@@ -83,7 +85,8 @@ export const UserDbRemote = {
 	open(opts) {
 		const realOpts = Object.assign( {}, opts );
 		realOpts.protocol= "userDatabaseClient";
-		realOpts.server = opts.server || "wss://localhost:8089/";	
+		//realOpts.
+		realOpts.server = realOpts.server || "wss://localhost:8089/";	
 		realOpts.authorize = (a)=>{
 			console.log( "authorize argument:", a );
 		}
