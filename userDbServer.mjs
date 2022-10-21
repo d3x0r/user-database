@@ -11,6 +11,7 @@ const nearPath = where.substr(0, nearIdx+1 );
 
 import path from "path";
 import {sack} from "sack.vfs"
+import {openServer} from "sack.vfs/apps/http-ws";
 const nativeDisk = sack.Volume();
 import config from "./config.jsox"
 
@@ -40,7 +41,7 @@ if(0)
 const JSOX = sack.JSOX;
 import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
 
-const storage = sack.ObjectStorage( "fs/data.os" );
+const storage = new sack.ObjectStorage( "fs/data.os" );
 UserDb.hook( storage );
 
 const methods = sack.Volume().read( nearPath+"userDbMethods.js" ).toString();
@@ -66,20 +67,6 @@ const l = {
 	expect : new Map(),
 }
 
-const mimeTypes = {
-	js:'text/javascript',
-	mjs:'text/javascript',
-	css:'text/css',
-	html:'text/html',
-	jpg:'image/jpeg',
-	png:'image/png',
-	wav:'audio/wav',
-	json : 'application/json',
-	wasm : 'application/wasm',
-	asm:'application/wasm',
-	pem:  'application/x-pem-file',
-	crt: 'application/x-x509-ca-cert',
-}
 
 const resourcePerms22 = [
 	{  file:"ui/admin/adminForm.html",  perm:"edit",   fallback:"ui/admin/noPerm.html" }
@@ -97,13 +84,13 @@ const resourcePerms = {
 
 // go is from userDb; waits for database to be ready.
 if( withLoader ) go.then( ()=>{
-        openServer( config.certPath?{ port : Number(process.argv[2])||8089 
-			, cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
-			, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
-			, ca : nativeDisk.read( config.certPath + "/fullchain.pem" ).toString()
+	const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8089 ;
+        openLoginServer( config.certPath?{ port 
+				, cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
+				, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
+				, ca : nativeDisk.read( config.certPath + "/fullchain.pem" ).toString()
 			}
-		:{ port : Number(process.argv[2])||8089 
-			} );
+		:{ port } );
 } );
 else {
 	function doNothing() { setTimeout( doNothing, 10000000 ); } doNothing();
@@ -126,12 +113,12 @@ UserDb.on( "pickSash", (user, choices)=>{
 	throw new Error( "How are you picking a sash for a user that's not connected?" );
 } );
 
-function openServer( opts, cb )
+function openLoginServer( opts, cb )
 {
 	const serverOpts = opts;
-	const server = sack.WebSocket.Server( serverOpts )
+	const server = openServer( serverOpts, accept, connect );
 	const disk = sack.Volume();
-	console.log( "serving on " + serverOpts.port );
+	console.log( "login serving on " + serverOpts.port );
 
 	// this connects my own service to me...
 	UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port } );
@@ -145,103 +132,7 @@ function openServer( opts, cb )
 		}
 	}
 
-	function getResource( req_url, req, user ) {
-		const res = {
-		     code: 404
-		     , content : null
-		     , headers : { 'Content-Type': "text/html" },
-		};
-		const parts = req_url.split( '/' );
-		if( parts.length < 3 ) {
-			console.log( "asfddsafadsf:", req_url, req.url );
-			if( req_url !== '/socket-service-swbundle.js' )  {
-				if( parts[1] === "serviceLogin.mjs" || parts[1] === "serviceLogin.js" ) {
-                                	res.code = 200;
-                                        res.headers["Content-Type"] = "text/javascript";
-					const allowService = new ServiceConnection();
-					l.services.set( allowService.serviceId, allowService );
-					const content = [ 'const serviceId="'+ allowService.serviceId + '";\n'
-									,serviceLoginScript];
-					res.content = content.join('');
-
-					console.log( "Service login script." );
-					return res;
-				}
-                                // redirect
-				res.code = 301;
-        	                res.headers = { Location:"/ui/profile/" };
-				return res;
-			}
-		}
-		if( parts[1] === "node_modules" ) {
-			if( parts[2] !== "@d3x0r" && parts[2] !== "jsox" ) {
-                        	res.code = 404;
-				res.content = "<html><head><title>404</title></head><body>Resource not found</body></html>";
-				return res;
-			}
-			parts[0] = nearPath+".";
-		} else {
-			if( user ) {
-				let perm = resourcePerms;
-				for( let part = 1; part < parts.length; part++ ) {
-					if( parts[part] in perm ) {
-						perm = perm[parts[part]];
-					}else {
-						perm = null;
-						break;
-					}
-				}
-				if( perm ) {
-					if( !user.badges[perm.perm] ) {
-						console.log( "File is permissioned...", perm, parts );
-						parts[1] = perm.fallback;
-						console.log( "", parts );
-						parts.length = 2;
-					} // otherwise, load the natural file.
-				}
-			}
-			parts[0] = nearPath.substr(0,nearPath.length-1);
-		}
-		
-		if( parts[parts.length-1] == "" ) parts[parts.length-1] = "index.html";
-
-
-		let filePath =  unescape(parts.join("/"));
-		if( req.url === '/socket-service-swbundle.js' ) filePath = 'node_modules/@d3x0r/socket-service/swbundle.js'
-		const extensions = path.extname(parts[parts.length-1]).split('.');
-		//extensions.splice(0,1);
-		const extname = extensions[extensions.length-1];
-
-		console.log( ":", extname, filePath )
-		res.headers["Content-Type"] = mimeTypes[extname];
-		if( req /*&& parts[parts.length-1]==="webSocketClient.js"*/ ) {
-			res.headers['Access-Control-Allow-Origin'] = req.headers.Origin;
-			res.headers['Vary'] = "origin";
-		}
-		if( disk.exists( filePath ) ) {
-			console.log( "Read:", req_url, "as", filePath  );
-			res.code = 200; 
-			res.content = disk.read( filePath )
-		} else {
-			console.log( "Failed request: ", req_url );
-			res.code = 404; 
-			res.content = "<HTML><HEAD><title>404</title></HEAD><BODY>404</BODY></HTML>";
-		}
-		return res;
-	}
-
-	server.onrequest = function( req, res ) {
-		var ip = ( req.headers && req.headers['x-forwarded-for'] ) ||
-			req.connection.remoteAddress ||
-			req.socket.remoteAddress ||
-			req.connection.socket.remoteAddress;
-
-		const resource = getResource( req.url, req, null );
-		res.writeHead(resource.code, resource.headers);
-		res.end( resource.content );
-	} ;
-
-	server.onaccept = function ( ws ) {
+	function accept( ws ) {
 		const protocol = ws.headers["Sec-WebSocket-Protocol"];
 
 		//console.log( "accept?", ws );
@@ -518,7 +409,7 @@ function openServer( opts, cb )
 		else          state.waits.pickSash.rej( msg.sash );
 	}
 
-	server.onconnect = function (ws) {
+	function connect(ws) {
 		//console.log( "Connect:", ws );
 		const protocol = ws.headers["Sec-WebSocket-Protocol"];
 		let user = null;
