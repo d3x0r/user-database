@@ -2,7 +2,7 @@
   "name": "@d3x0r/user-database",
   "version": "1.0.0",
   "description": "User database microservice",
-  "main": "UserDb.mjs",
+  "main": "userDb.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "go": "node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs",
@@ -11,10 +11,13 @@
   },
   "exports": {
     ".": {
-      "import": "./UserDb.mjs"
+      "import": "./userDb.mjs"
     },
     "./service": {
       "import": "./userDbServer.mjs"
+    },
+    "./serviceLogin":{
+      "import": "./serviceLogin.mjs"
     }
   },
   "repository": {
