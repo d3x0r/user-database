@@ -30,9 +30,9 @@ export class Admin extends Popup {
 				this.load();
 			}
 
-		} , { useForm:"/ui/login/loginForm.html"
-		    , useSashForm:"/ui/login/pickSashForm.html"
-		    , sashScript : "/ui/login/pickSashForm.js"
+		} , { useForm:"/login/loginForm.html"
+		    , useSashForm:"/login/pickSashForm.html"
+		    , sashScript : "/login/pickSashForm.js"
 		    , wsLoginClient:connection} );
 
 		
@@ -49,7 +49,7 @@ export class Admin extends Popup {
 
 
 	load() {
-		popups.fillFromURL( this, "/ui/admin/adminForm.html" );
+		popups.fillFromURL( this, "/admin/adminForm.html" );
 		this.show();
 		
 	}

@@ -5,6 +5,7 @@ const stringifier = JSOX.stringifier();
 
 import {BloomNHash} from "@d3x0r/bloomnhash"
 import {SlabArray}  from "@d3x0r/slab-array"
+import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 
 const StoredObject = sack.ObjectStorage.StoredObject;
 //import {StoredObject} from "../commonDb.mjs"
@@ -155,7 +156,7 @@ export class Sash extends StoredObject{
         	return ( this.#service.domain === domain );
         }
 	store() {
-		console.trace( "WHO IS SAVING A SASH SO EARLY?" );
+		//console.trace( "WHO IS SAVING A SASH SO EARLY?" );
 		super.store();
 	}
 }
@@ -605,7 +606,7 @@ export class Service  extends StoredObject{
 	}
 
 	getServiceInstance( sid ) {
-		console.trace( "Getting instance:", sid );
+		//console.trace( "Getting instance:", sid );
 		if( !sid ) {
 			console.log( "Just getting any instance.... (overlapped function)")
 			if( !this.#instances.length ) {
@@ -802,12 +803,12 @@ export class User  extends StoredObject{
 		let s = 0;
 		for( ; s < this.sashes.length; s++ ) {
 			const sash = this.sashes[s];
-			console.log( "Sash is incomplete?", sash, sash.service, sash.service.domain )
+			//console.log( "Sash is incomplete?", sash, sash.service, sash.service.domain )
 			if( sash.for( domain ) )
 				found.push(sash);
 		} ;
 		let sash = null;
-		console.log( "Found?", found, this, this.sashses, domain );
+		//console.log( "Found?", found, this, this.sashses, domain );
 		if( !found.length ) {
 			
 		}
@@ -1003,8 +1004,8 @@ const UserDb = {
 			//console.log( "Write?", l.ids );
 			file.write( l.ids );
 		}
-                	if( initResolve )
-	                	initResolve();
+		if( initResolve )
+			initResolve();
 		else console.log( "Init never resolves...." );
 	},
 	on( event, data ) {
@@ -1055,7 +1056,7 @@ const UserDb = {
         },
 	Device:Device,
 	UniqueIdentifier:UniqueIdentifier,
-
+	socketHandleRequest,
 	// register a service... this essentially blocs 
 	async getService( ws, service ) {
 		//console.trace( "GET service:", ws, service );
@@ -1065,7 +1066,7 @@ const UserDb = {
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;
 			} );
-			console.log( "Adding pending registration ", reg)
+			//console.log( "Adding pending registration of Org", reg)
 			l.registrations.push( reg );
 			return reg.p;
 		}
@@ -1079,8 +1080,6 @@ const UserDb = {
 			// this returns a service instance....
 			return dmn.addService( service.service );
 		}
-
-
 		console.log( "Resulting with service" );
 		return oldService;
 	},

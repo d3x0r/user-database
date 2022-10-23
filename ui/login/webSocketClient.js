@@ -8,29 +8,29 @@
 
 //const origin = "https://d3x0r.org:8089"
 
-const here = new URL( import.meta.url );
+const here = new URL(import.meta.url);
 //console.log( "Origin? Meta?", location, import.meta, here );
 
-import {popups,AlertForm} from "/node_modules/@d3x0r/popups/popups.mjs"
-import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
+import { popups, AlertForm } from "/node_modules/@d3x0r/popups/popups.mjs"
+import { JSOX } from "/node_modules/jsox/lib/jsox.mjs"
 //console.log( "location:", location, import.meta );
 let workerInterface = null;
-const importing = import( here.origin+"/node_modules/@d3x0r/socket-service/swc.js" ).then( (module)=>{
+const importing = import(here.origin + "/node_modules/@d3x0r/socket-service/swc.js").then((module) => {
 	workerInterface = module.workerInterface;
 	workerInterface.initWorker();
-} ).catch ((err)=>{
-	if( !alertForm ) alertForm = new AlertForm();
-	alertForm.caption = "Site does not support socket-service.";
+}).catch((err) => {
+	if (!alertForm) alertForm = new AlertForm();
+	alertForm.caption = "Site does not support socket-service.\n" + err.message;
 	alertForm.show();
-} );
+});
 //import {workerInterface} from location.origin+"/socket-service-client.js"
 
 let isGuestLogin = false;
 let createMode = false;
 
-const towers = [location.protocol.replace( "http", "ws" )+"//"+location.host +"/",
-		"wss://d3x0r.org:8089/",
-		"wss://poopfixer.com:8089/", 
+const towers = [location.protocol.replace("http", "ws") + "//" + location.host + "/",
+	"wss://d3x0r.org:8089/",
+	"wss://poopfixer.com:8089/",
 
 ];
 
@@ -45,94 +45,94 @@ const towers = [location.protocol.replace( "http", "ws" )+"//"+location.host +"/
 
 
 const l = {
-    ws : null,
+	ws: null,
 
-    loginForm : null,
+	loginForm: null,
 
-	bindControls( popup ) {
-    		const f = popup.divFrame;
+	bindControls(popup) {
+		const f = popup.divFrame;
 
-    		const form1 = f.querySelector( "#loginForm" );
+		const form1 = f.querySelector("#loginForm");
 
-    		const form2 = f.querySelector( "#createForm" );
-    		const form3 = f.querySelector( "#guestForm" );
-
-		form3.style.display = "none";
-		form2.style.display = "none";
+		const form2 = f.querySelector("#createForm");
+		const form3 = f.querySelector("#guestForm");
+		if (!form1 && !form2 && !form3) return;
+		if (form3) form3.style.display = "none";
+		if (form2) form2.style.display = "none";
 		//form3.style.display = "none";
 
-		const userField =form1.querySelector( "#user" );
-		const passField =form1.querySelector( "#password" );
-		
-		const nameField2 =form2.querySelector( "#name" );
-		const userField2 =form2.querySelector( "#user" );
-		const emailField2 =form2.querySelector( "#email" );
-		const passField2 =form2.querySelector( "#password" );
-		const passField22 =form2.querySelector( "#password2" );
+		const userField = form1.querySelector("#user");
+		const passField = form1.querySelector("#password");
 
-		const userField3 =form3.querySelector( "#user" );
-		const userLogin = f.querySelector( "#doLogin" );
-		
-		const createAccount = f.querySelector( "#createAccount" );
-		const createAccountInner = f.querySelector( "#createAccountInner" );
-		const guestLogin = f.querySelector( "#guestLogin" );
-		const guestLoginInner =  f.querySelector( "#guestLoginInner" );
+		const nameField2 = form2.querySelector("#name");
+		const userField2 = form2.querySelector("#user");
+		const emailField2 = form2.querySelector("#email");
+		const passField2 = form2.querySelector("#password");
+		const passField22 = form2.querySelector("#password2");
+
+		const userField3 = form3 && form3.querySelector("#user");
+		const userLogin = f.querySelector("#doLogin");
+
+		const createAccount = f.querySelector("#createAccount");
+		const createAccountInner = f.querySelector("#createAccountInner");
+		const guestLogin = f.querySelector("#guestLogin");
+		const guestLoginInner = f.querySelector("#guestLoginInner");
 
 
-		form1.addEventListener( "submit", (evt)=>{
+		form1.addEventListener("submit", (evt) => {
 			evt.preventDefault();
 			doUserLogin();
 			return false;
 			//console.log( "Form1 submit key?" );
-		})		
-		form2.addEventListener( "submit", (evt)=>{
+		})
+		form2.addEventListener("submit", (evt) => {
 			evt.preventDefault();
 			doUserLogin();
 			return false;
 			//console.log( "Form2 submit key?" );
-		})		
-		form3.addEventListener( "submit", (evt)=>{
+		})
+		form3.addEventListener("submit", (evt) => {
 
 			evt.preventDefault();
 			doUserLogin();
 			return false;
 			//console.log( "Form3 submit key?" );
-		})		
-		const doGuestLogin = ()=>{
-			if( isGuestLogin) {
-		       		form3.style.display = "none";
-				if( createMode ) {
-			       		form2.style.display = "";
-		       			form1.style.display = "none";
-				}else{
-			       		form2.style.display = "none";
-		       			form1.style.display = "";
+		})
+		const doGuestLogin = () => {
+			if (isGuestLogin) {
+				form3.style.display = "none";
+				if (createMode) {
+					form2.style.display = "";
+					form1.style.display = "none";
+				} else {
+					form2.style.display = "none";
+					form1.style.display = "";
 				}
 				guestLoginInner.textContent = "Use Guest Login";
 				isGuestLogin = false;
-			}  else {
-		       		form3.style.display = "";
-		       		form2.style.display = "none";
-	       			form1.style.display = "none";
+			} else {
+				form3.style.display = "";
+				form2.style.display = "none";
+				form1.style.display = "none";
 				guestLoginInner.textContent = "Use Account Login";
 				isGuestLogin = true;
 			}
 			userField3.focus();
 			popup.center();
-	    } 
-		
-		popups.handleButtonEvents( guestLogin, doGuestLogin);
-		
-		const doCreateButton = ()=>{
-			if( createMode ) {
-				 form3.style.display = "none";
-				 form2.style.display = "none";
-				 form1.style.display = "";
+		}
+
+		popups.handleButtonEvents(guestLogin, doGuestLogin);
+
+		const doCreateButton = () => {
+			if (createMode) {
+				form3.style.display = "none";
+				form2.style.display = "none";
+				form1.style.display = "";
 
 				createAccountInner.innerText = "Create Account";
 				userField.focus();
 				popup.center();
-			}else {
+			} else {
 				form3.style.display = "none";
 				form2.style.display = "";
 				form1.style.display = "none";
@@ -146,195 +146,197 @@ const l = {
 			createMode = !createMode;
 		}
 
-		popups.handleButtonEvents( createAccount, doCreateButton );
+		popups.handleButtonEvents(createAccount, doCreateButton);
 
 
-		passField22.addEventListener( "blur", ()=>{  
-			
-		} );
+		passField22.addEventListener("blur", () => {
 
-		const doUserLogin =  ()=>{
-			if( !l.ws ) {
-				if( !alertForm ) alertForm = new AlertForm();
+		});
+
+		const doUserLogin = () => {
+			if (!l.ws) {
+				if (!alertForm) alertForm = new AlertForm();
 				alertForm.caption = "Waiting for connect...";
 				alertForm.show();
 				return
 			}
-			if( isGuestLogin ) {
-				if( userField3.value.length < 3 ) {
-					if( !alertForm ) alertForm = new AlertForm();
+			if (isGuestLogin) {
+				if (userField3.value.length < 3) {
+					if (!alertForm) alertForm = new AlertForm();
 					alertForm.caption = "Please use a longer display name...";
 					alertForm.show();
 				} else {
-					l.ws.doGuest( userField3.value );
+					l.ws.doGuest(userField3.value);
 				}
 			}
 			else {
-			    	if(createMode ) {
-					if( passField2.value === passField22.value )
-						l.ws.doCreate( nameField2.value, userField2.value, passField2.value, emailField2.value );
+				if (createMode) {
+					if (passField2.value === passField22.value)
+						l.ws.doCreate(nameField2.value, userField2.value, passField2.value, emailField2.value);
 					else {
-						if( !alertForm ) alertForm = new AlertForm();
+						if (!alertForm) alertForm = new AlertForm();
 						alertForm.caption = "Please reconfirm your password...";
 						alertForm.show();
 					}
-						
-				   } else {
-					if(l.ws.doLogin )
-						l.ws.doLogin( userField.value, passField.value );
-					else{
-						if( !alertForm ) alertForm = new AlertForm();
-						alertForm.show( "Login is not ready..." );
+
+				} else {
+					if (l.ws.doLogin)
+						l.ws.doLogin(userField.value, passField.value);
+					else {
+						if (!alertForm) alertForm = new AlertForm();
+						alertForm.show("Login is not ready...");
 					}
 				}
 			}
-		} 
-		popups.handleButtonEvents( userLogin, doUserLogin);
+		}
+		popups.handleButtonEvents(userLogin, doUserLogin);
 		popup.center();
 		popup.show();
 		userField.focus();
 	},
-	request( domain, service ) {
-		return l.ws.request( domain, service );
+	request(domain, service) {
+		return l.ws.request(domain, service);
 	},
-	openSocket:openSocket,
-	events : {},
-	on( evt, d ) {
-		if( "function" === typeof d ) {
-			if( evt in l.events ) l.events[evt].push(d);
+	openSocket: openSocket,
+	events: {},
+	on(evt, d) {
+		if ("function" === typeof d) {
+			if (evt in l.events) l.events[evt].push(d);
 			else l.events[evt] = [d];
 			return d;
-		}else {
+		} else {
 			let result = null;
-			if( evt in l.events ) l.events[evt].forEach( cb=>(result=cb(d,result)) );
+			if (evt in l.events) l.events[evt].forEach(cb => (result = cb(d, result)));
 			return result;
 		}
 	}
-	
+
 }
-const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
+const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 
-let alertForm = null ;
+let alertForm = null;
 
-function Alert( s ) {
-	if( !alertForm ) alertForm = new AlertForm(l.loginForm.divFrame.parentNode);
+function Alert(s) {
+	if (!alertForm) alertForm = new AlertForm(l.loginForm.divFrame.parentNode);
 	alertForm.caption = s;
 	alertForm.show();
-} 
+}
 
 
-function processMessage( msg_ ) {
-	const msg = JSOX.parse( msg_ );
-	if( l.ws.processMessage && l.ws.processMessage( l.ws, msg ) ) return;
+function processMessage(msg_) {
+	const msg = JSOX.parse(msg_);
+	if (l.ws.processMessage && l.ws.processMessage(l.ws, msg)) return;
 
-	if( msg.op === "addMethod" ) {
+	if (msg.op === "addMethod") {
 		try {
-		    	// why is this not in a module?
-			var f = new AsyncFunction( "JSON", "Import", "connector", "Alert", msg.code );
-			const p = f.call( l.ws, JSOX, (i)=>import(i), l, Alert );
+			// why is this not in a module?
+			var f = new AsyncFunction("JSON", "Import", "connector", "Alert", msg.code);
+			const p = f.call(l.ws, JSOX, (i) => import(i), l, Alert);
 			l.connected = true;
-			if( l.loginForm )
+			if (l.loginForm)
 				l.loginForm.connect();
-		} catch( err ) {
-			console.log( "Function compilation error:", err,"\n", msg.code );
+		} catch (err) {
+			console.log("Function compilation error:", err, "\n", msg.code);
 		}
 	}
-	else if( msg.op === "login" ) {
-		if( msg.success ) {
+	else if (msg.op === "login") {
+		if (msg.success) {
 			//Alert(" Login Success" );
-			if( l.loginForm && l.loginForm.login )
+			if (l.loginForm && l.loginForm.login)
 				l.loginForm.login(true);
-		} else if( msg.ban ) {
-			Alert( "Bannable Offense" );
-		} else if( msg.device ) {
+		} else if (msg.ban) {
+			Alert("Bannable Offense");
+		} else if (msg.device) {
 			//temporary failure, this device was unidentified, or someone elses
 			const newId = l.ws.SaltyRNG.Id();
-			localStorage.setItem( "deviceId", newId );
-			l.ws.send( JSOX.stringify( {op:"device", deviceId:newId } ) );
+			localStorage.setItem("deviceId", newId);
+			l.ws.send(JSOX.stringify({ op: "device", deviceId: newId }));
 		} else
-			Alert( "Login Failed..." );		
-		
+			Alert("Login Failed...");
+
 	}
-	else if( msg.op === "guest" ) {
-		if( msg.success ) {
+	else if (msg.op === "guest") {
+		if (msg.success) {
 			//Alert(" Login Success" );
-			if( l.loginForm && l.loginForm.login )
+			if (l.loginForm && l.loginForm.login)
 				l.loginForm.login(false);
 		} else
-			Alert( "Login Failed..." );
-		
+			Alert("Login Failed...");
+
 	}
-	else if( msg.op === "create" ) {
-		if( msg.success ) {
-			if( l.loginForm && l.loginForm.login )
-				l.loginForm.login( 1 );
+	else if (msg.op === "create") {
+		if (msg.success) {
+			if (l.loginForm && l.loginForm.login)
+				l.loginForm.login(1);
 			//Alert(" Login Success" );			
-		} else if( msg.ban )  {
-			Alert( "Bannable Offense" );
-		} else if( msg.account ) {
-			Alert( "Account name in use..." );
-		} else if( msg.email ) {
-			Alert( "Email already in use... <br> Try account recovery?" );
+		} else if (msg.ban) {
+			Alert("Bannable Offense");
+		} else if (msg.account) {
+			Alert("Account name in use...");
+		} else if (msg.email) {
+			Alert("Email already in use... <br> Try account recovery?");
 		} else {
-			Alert( "Creation Failed..." );
+			Alert("Creation Failed...");
 		}
-		
+
 	}
-	else if( msg.op === "pickSash" ) {
+	else if (msg.op === "pickSash") {
 		// this is actually a client event.
-		pickSash( ws, msg.choices );
+		pickSash(ws, msg.choices);
 	}
 }
 
-async function 	pickSash( ws, choices ){
-	if( l.loginForm && l.loginForm.pickSash ) {
-		const choice = await l.loginForm.pickSash( msg.choices );
-		if( choice )
-			ws.send( {op:"pickSash", ok:true, sash : choice } );
+async function pickSash(ws, choices) {
+	if (l.loginForm && l.loginForm.pickSash) {
+		const choice = await l.loginForm.pickSash(msg.choices);
+		if (choice)
+			ws.send({ op: "pickSash", ok: true, sash: choice });
 		else
-			ws.send( {op:"pickSash", ok:false, sash : "User Declined Choice." } );
+			ws.send({ op: "pickSash", ok: false, sash: "User Declined Choice." });
 	}
-	ws.send( {op:"pickSash", ok:false, sash : "Choice not possible." } );
+	ws.send({ op: "pickSash", ok: false, sash: "Choice not possible." });
 }
 
 
 
-async function openSocket( addr, cb, protocol ) {
-	if( !workerInterface )  {
+async function openSocket(addr, cb, protocol) {
+	if (!workerInterface) {
 		await importing
 	}
-	return new Promise( (res,rej)=>{
-		
-		let index = 0;
-		tryOne( towers[index] );
-		function tryOne( addr ){
-			//addr = addr || "wssd3x0r.org:8089" || location.host;
-	
+	return new Promise((res, rej) => {
 
-			if( workerInterface )
-                        workerInterface.connect( addr, protocol|| "login", (statusmsg, msg)=>{
-				if( statusmsg === true ) {
-					if( cb ) cb(msg);
-					else if( "object" === typeof msg ){ 
-						// msg is a websocket-like object
-						res( msg );
-						//console.log( "resolved with msg..." );
-					} else {
-						console.log( "Dropped message:", msg );
+		let index = -1;
+		tryOne(addr);
+		//tryOne(towers[index]);
+		function tryOne(addr) {
+			//addr = addr || "wssd3x0r.org:8089" || location.host;
+			if (workerInterface)
+				workerInterface.connect(addr, protocol || "login", (statusmsg, msg) => {
+					if (statusmsg === true) {
+						if (cb) cb(msg);
+						else if ("object" === typeof msg) {
+							// msg is a websocket-like object
+							res(msg);
+							//console.log( "resolved with msg..." );
+						} else {
+							console.log("Dropped message:", msg);
+						}
+						l.ws = msg;
+						//console.log( "is websocket?", msg );
+
+					} else if( "string" === typeof statusmsg ) {
+						console.log( "post status message:", statusmsg );
+					}else {
+						console.log("!!!(NEXTSERVER?)connect got:", statusmsg);
+						index++; if( index < towers.length ) tryOne( towers[index] );
 					}
-					l.ws = msg;
-					//console.log( "is websocket?", msg );
-                
-				}else {
-					console.log( "!!!(NEXTSERVER?)connect got:", statusmsg );
-				}
-			}, processMessage );
-                }
-		
-	} );
+				}, processMessage);
+		}
+
+	});
 }
 
 
-export {l as connection,Alert,openSocket};
+export { l as connection, Alert, openSocket };
 
 

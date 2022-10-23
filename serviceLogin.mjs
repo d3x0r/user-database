@@ -25,19 +25,21 @@ function open( opts ) {
 	const server = opts.server;
 	console.log( "connect with is:", server, protocol );
 	var client = sack.WebSocket.Client( server, protocol, { perMessageDeflate: false } );
-        
-	client.on("open", function (ws)  {
-		console.log( "Connected (service identification in process; consult config .jsox files)" );
+    client.opts = opts;
+	client.on("open", function ()  {
+		const ws = this;
+		console.log( "Connected (service identification in process; consult config .jsox files)", opts.configPath || "<current PWD>" );
 		//console.log( "ws: ", this ); //  ws is also this
 		this.onmessage = ( msg_ )=> {
 			const msg = sack.JSOX.parse( msg_ );
 			if( msg.op === "addMethod" ) {
 				try {
-					var f = new AsyncFunction( "Import", "on", msg.code );
-					const p = f.call( this, (m)=>import(m), UserDbRemote.on );
-					if( opts.connect ) opts.connect( this );
+					var f = new AsyncFunction( "Import", "on", "PORT", msg.code );
+					const p = f.call( ws, (m)=>import(m), UserDbRemote.on, opts.port );
 					p.then( ()=>{
-						this.on( "expect", msg=>expectUser(this,msg) );
+						
+						if( opts.connect ) opts.connect( ws );
+						//ws.on( "expect", msg=>expectUser(this,msg) );
 					} );
 				} catch( err ) {
 					console.log( "Function compilation error:", err,"\n", msg.code );
@@ -66,8 +68,8 @@ function open( opts ) {
                 //client.send( "." );
 	} );
 
-	client.on( "close", function( msg ) {
-      		console.log( "unopened connection closed" );
+	client.on( "close", function( codd, reason ) {
+      		console.log( "unopened connection closed", code, reason );
 	} );
 	return client;
 } 
@@ -86,7 +88,9 @@ export const UserDbRemote = {
 		const realOpts = Object.assign( {}, opts );
 		realOpts.protocol= "userDatabaseClient";
 		//realOpts.
-		realOpts.server = realOpts.server || "wss://localhost:8089/";	
+		const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8089 ;
+
+		realOpts.server = realOpts.server || "ws://localhost:"+port+"/";	
 		realOpts.authorize = (a)=>{
 			console.log( "authorize argument:", a );
 		}

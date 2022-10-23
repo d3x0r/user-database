@@ -4,6 +4,7 @@ const ws = this;
 //console.log( "Extend this websocket:", this );
 
 const serviceConfig = (await Import("./config.jsox")).default;
+const configPath = ws.opts.configPath || "";
 
 const os = await Import( "os" );
 const sackModule = await Import( "sack.vfs" );
@@ -11,11 +12,11 @@ const sack = sackModule.sack;
 const JSOX = sack.JSOX;
 const disk = sack.Volume();
 // my path is poorly defined here...
-const srvc = disk.exists( "service.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( "service.jsox" ) );
-if( srvc ) srvc.badges = srvc && disk.exists( "badges.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( "badges.jsox" ) );
+const srvc = disk.exists( configPath + "service.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( configPath + "service.jsox" ) );
+if( srvc ) srvc.badges = srvc && disk.exists( configPath + "badges.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( configPath + "badges.jsox" ) );
 let mySID = srvc.badges 
-		&& ( ( disk.exists( "fs/mySid.jsox" ) && sack.Volume.readAsString( "fs/mySid.jsox" ) )
-		   || ( disk.exists( "mySid.jsox" ) && sack.Volume.readAsString( "mySid.jsox" ) ) );
+		&& ( ( disk.exists( configPath + "fs/mySid.jsox" ) && sack.Volume.readAsString( configPath + "fs/mySid.jsox" ) )
+		   || ( disk.exists( configPath + "mySid.jsox" ) && sack.Volume.readAsString( configPath + "mySid.jsox" ) ) );
 
 if( !srvc ) {
 	console.log( "Service definition not found..." );
@@ -42,8 +43,13 @@ const config = {
 	},
 }
 
-const loc = getLocation();
+const loc = getLocation(); 
 
+
+srvc.loc=loc;
+srvc.addr=config.addresses;
+srvc.iaddr=config.internal_addresses;
+srvc.port = PORT ;
 
 
 
@@ -102,7 +108,7 @@ if( srvc instanceof Array ) {
 
 function registerService( srvc ) {
 	//console.log( "Blah:", serviceConfig, serviceConfig.publicAddresses );
-	ws.send( JSOX.stringify( { op:"register", sid:mySID, svc:srvc, loc:loc, addr:config.addresses, iaddr:config.internal_addresses, public:serviceConfig.publicAddresses } ) );
+	ws.send( JSOX.stringify( { op:"register", sid:mySID, svc:srvc } ) );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
 	return p.p;

@@ -1,12 +1,13 @@
 
 //console.log( "meta?", import.meta );
-const _debug = true;
+//const _debug = true;
+const _debug_email = false;
 import DNS from 'dns';
 
 const colons = import.meta.url.split(':');
 const where = colons.length===2?colons[1].substr(1):colons[2];
 const nearIdx = where.lastIndexOf( "/" );
-const nearPath = where.substr(0, nearIdx+1 );
+const nearPath = where.substr(0, nearIdx );
 //console.log( "environment:", process.env );
 
 import path from "path";
@@ -14,6 +15,7 @@ import {sack} from "sack.vfs"
 import {openServer} from "sack.vfs/apps/http-ws";
 const nativeDisk = sack.Volume();
 import config from "./config.jsox"
+import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 
 const withLoader = true;//process.env.SELF_LOADED;
 // make sure we load the import script
@@ -44,13 +46,13 @@ import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
 const storage = new sack.ObjectStorage( "fs/data.os" );
 UserDb.hook( storage );
 
-const methods = sack.Volume().read( nearPath+"userDbMethods.js" ).toString();
+const methods = sack.Volume().read( nearPath+"/userDbMethods.js" ).toString();
 const methodMsg = JSON.stringify( {op:"addMethod", code:methods} );
 
-const serviceMethods = sack.Volume().read( nearPath+"serviceDbMethods.js" ).toString();
+const serviceMethods = sack.Volume().read( nearPath+"/serviceDbMethods.js" ).toString();
 const serviceMethodMsg = JSON.stringify( {op:"addMethod", code:serviceMethods} );
 
-const serviceLoginScript = sack.Volume().read( nearPath+"serviceLogin.mjs" ).toString();
+const serviceLoginScript = sack.Volume().read( nearPath+"/serviceLogin.mjs" ).toString();
 
 import {UserDbRemote} from "./serviceLogin.mjs";
 
@@ -85,12 +87,18 @@ const resourcePerms = {
 // go is from userDb; waits for database to be ready.
 if( withLoader ) go.then( ()=>{
 	const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8089 ;
-        openLoginServer( config.certPath?{ port 
-				, cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
+	const serverOpts = { port ,
+		resourcePath: nearPath + "/ui" ,
+		npmPath: nearPath
+		};
+	console.log( "serving from?", serverOpts );
+	if( config.certPath ) Object.assign( serverOpts, { 
+				 cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
 				, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
 				, ca : nativeDisk.read( config.certPath + "/fullchain.pem" ).toString()
-			}
-		:{ port } );
+			} );
+
+       openLoginServer( 		serverOpts );
 } );
 else {
 	function doNothing() { setTimeout( doNothing, 10000000 ); } doNothing();
@@ -113,17 +121,36 @@ UserDb.on( "pickSash", (user, choices)=>{
 	throw new Error( "How are you picking a sash for a user that's not connected?" );
 } );
 
+function serviceRequestFilter( req, res ) {
+	console.log( "userDbServer req filter:", req.url );
+	if( req.url == "/serviceLogin.mjs" ) {
+		const filePath = nearPath + req.url;
+
+		if( nativeDisk.exists( filePath ) ) {
+			const headers = { 'Content-Type': "text/javascript", 'Access-Control-Allow-Origin' : req.connection.headers.Origin };
+			//if( contentEncoding ) headers['Content-Encoding']=contentEncoding;
+			res.writeHead(200, headers );
+			res.end( nativeDisk.read( filePath ) );
+			return true;
+		}
+	}
+}
+
 function openLoginServer( opts, cb )
 {
 	const serverOpts = opts;
 	const server = openServer( serverOpts, accept, connect );
+	//server.addHandler( serviceRequestFilter );
+	server.addHandler( socketHandleRequest );
 	const disk = sack.Volume();
 	console.log( "login serving on " + serverOpts.port );
 
 	// this connects my own service to me...
-	UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port } );
+	UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
+			, configPath:nearPath + "/"
+		 } );
 
-	//console.table( disk.dir() );
+	//console.table( nativeDisk.dir() );
 
 	class ServiceConnection {
 		serviceId = sack.Id();
@@ -135,7 +162,7 @@ function openLoginServer( opts, cb )
 	function accept( ws ) {
 		const protocol = ws.headers["Sec-WebSocket-Protocol"];
 
-		//console.log( "accept?", ws );
+		//console.log( "accept?", protocol );
 		if( protocol === "login" )
 			return this.accept();
 		if( protocol === "profile" )
@@ -183,7 +210,7 @@ function openLoginServer( opts, cb )
 		const isClient = await UserDb.getIdentifier( msg.clientId );
 		
 		if( !isClient ) {
-			console.log( "didn't know the client... ignoring ban result" );
+			console.log( "didn't know the client... ignoring ban result", msg.clientId, msg );
 			//ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
 			//return;
 		}
@@ -354,19 +381,21 @@ function openLoginServer( opts, cb )
 			// this will wait until a client asks for this service; even on reconnect
 			const srvc = await UserDb.getService( ws, msg.svc );
 			//console.log( "Service:", srvc );
-			const inst = srvc.getServiceInstance( msg.sid, ws );
+			const inst = srvc.service.getServiceInstance( msg.sid, ws );
 			if( inst ){
 				console.log( "This is connecting the socket to the active instance..." );
 				inst.connect( ws );		
 			} else {
 				console.log(" THis is adding a new instance for that service; BAD id recovery");
-				srvc.addInstance( ws); // does connect also.
+				srvc.service.addInstance( ws); // does connect also.
 				//inst.connect( ws );
 			}
 		} 
 		else 
 		{
-         	console.log( "otherwise find the service (post reg)", msg );
+         //console.log( "otherwise find the service (post reg)", msg );
+			// msg has addr:[], iaddr:[], loc:(uid), sid:false, op:register
+			//       , svc:{badges,description,domain,or,service}
 			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
 				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
 				//s = s.addInstance( ws );
@@ -399,8 +428,11 @@ function openLoginServer( opts, cb )
 				ws.send( JSOX.stringify( {op:"request", id:msg.id, name:ws.state.user.name, ok:true, svc:expect } ) );
 			} );
 		} else {
+			if( ws.state.forGuest )
+				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, noUsers:true } ) );
+			else				
 			//console.log( "Sending reply to client that we don't have a service yet?" );
-			ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, probe:true } ) );
+				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, probe:true } ) );
 		}
 	}
 
@@ -419,7 +451,7 @@ function openLoginServer( opts, cb )
 			//console.log( "send greeting message, setitng up events" );
 			ws.onmessage = handleService;
 			ws.onclose = closeService;
-			console.log( "sending service fragment" );
+			//console.log( "sending service fragment" );
 			ws.send( serviceMethodMsg );
 		} else if( protocol === "admin" ){
 			ws.onmessage = handleAdmin;
@@ -618,7 +650,7 @@ function validateEmail( email, cb ) {
 	if( !email ) return cb( false );
 	function lookupDomain( domain, cb ) {
 		DNS.lookup( domain, (err,address,family)=>{
-			_debug && console.log( "test domain:",domain, err);
+			_debug_email && console.log( "test domain:",domain, err);
 			if( err ) cb( false );
 			else cb( true );
 		})
@@ -681,41 +713,41 @@ function validateEmail( email, cb ) {
 				else if( quoted ) { escape = true; continue; }
 			if( escape ) { escape = false; continue; };
 			if( email[n] == '.' ) {
-				_debug&&console.log( "found a dot...", quoted, parts );
+				_debug_email&&console.log( "found a dot...", quoted, parts );
 				if( quoted ) continue;
 				parts.push( email.substr( lastPart, n-lastPart ) );
 				lastPart = n+1;
 			}
 		}
-		_debug&&console.log( "Tail:", lastPart, email, "=", email.substr( lastPart ) );
+		_debug_email&&console.log( "Tail:", lastPart, email, "=", email.substr( lastPart ) );
 		parts.push( email.substr( lastPart ) );
 		return parts;
 	}
 	var parts = quotedAtSplit( email );
-	_debug&&console.log( "Split:", parts );
-	if( parts.length != 2 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-	if( parts[0].length > 64 || parts[0].length < 1 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+	_debug_email&&console.log( "Split:", parts );
+	if( parts.length != 2 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+	if( parts[0].length > 64 || parts[0].length < 1 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 	parts[0] = stripComment( parts[0] );
-	if( !parts[0] ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+	if( !parts[0] ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 	parts[1] = stripComment( parts[1] );
-	if( !parts[1] ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-	_debug&&console.log( "domain comment-stripped:", parts[1] );
+	if( !parts[1] ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+	_debug_email&&console.log( "domain comment-stripped:", parts[1] );
 
 	var local = quotedDotSplit( parts[0] );
-	_debug&&console.log( "local dot split:", local );
+	_debug_email&&console.log( "local dot split:", local );
 	for( n = 0; n < local.length; n++ ) {
 		local[n] = [...local[n]];
 	}
-	if( parts[1].length > 253 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+	if( parts[1].length > 253 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 	var domain = parts[1].split( "." );
-	if( domain.length > 127 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+	if( domain.length > 127 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 	var n;
 	for( n = 0; n < local.length; n++ ) {
-		if( !local[n].length ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+		if( !local[n].length ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 		var len = local[n].length;
 		var escape = false;
 		if( local[n][0] == '"' ) {
-			if( local[n][local[n].length-1] !== '"' ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+			if( local[n][local[n].length-1] !== '"' ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 			len--;
 			for( var m = 1; m < len; m++ ) {
 				if( local[n][m].codePointAt(0) > 0x7f ) continue;
@@ -736,14 +768,14 @@ function validateEmail( email, cb ) {
 				}
 				if( !allowedChars.includes( local[n][m] ) )
 					if( !allowedChars2.includes( local[n][m] ) )
-						{ _debug&&console.log( "Fail at char:", m, local[n], local[n][m] ); _debug&&console.trace( "FAIL" ); return false; }
+						{ _debug_email&&console.log( "Fail at char:", m, local[n], local[n][m] ); _debug_email&&console.trace( "FAIL" ); return false; }
 			}
 		}
 		else {
 			for( var m = 0; m < len; m++ ) {
 				if( local[n][m].codePointAt(0) > 0x7f ) continue;
 				if( !allowedChars.includes( local[n][m] ) )
-					{ _debug&&console.trace( "FAIL" ); cb(false);return false; }
+					{ _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 			}
 		}
 	}
@@ -756,13 +788,13 @@ function validateEmail( email, cb ) {
 			var zero = 0;
 			for( var n = 1; n < addrparts.length; n++ ) {
 				if( !addrparts[n].length ) {
-					if( zero ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // already found a zero filler
+					if( zero ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // already found a zero filler
 					zero = n;
 					words.push( 0 );
 				} else {
 					var val = parseInt(addrparts[n], 16);
 					if( val.toString(16).toUpperCase() !== addrparts[n].toUpperCase() )
-						{ _debug&&console.trace( "FAIL" ); cb(false);return false; }
+						{ _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 					words.push( val );
 				}
 			}
@@ -778,55 +810,55 @@ function validateEmail( email, cb ) {
 					newwords.push( words[n] );
 				return newwords;
 			}
-			_debug&&console.log( "words:", words );
+			_debug_email&&console.log( "words:", words );
 			words = zeroFill( words );
-			_debug&&console.log( "words:", words );
-			if( words.length !== 8 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-			if( !words[0] ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-			if( words[0] > 0xFF00 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to mutlicast email
-			if( words[0] == 0xfec0 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to site local
-			if( words[0] == 0x0100 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to trash
-			if( ( words[0] & 0xFF30 ) == 0xfe80 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to site local
-			if( ( words[0] & 0xFC00 ) == 0xfc00 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // unique local
-			if( words[0] == 0x2001 && words[1] == 0xdb8 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to example IP
+			_debug_email&&console.log( "words:", words );
+			if( words.length !== 8 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+			if( !words[0] ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+			if( words[0] > 0xFF00 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to mutlicast email
+			if( words[0] == 0xfec0 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to site local
+			if( words[0] == 0x0100 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to trash
+			if( ( words[0] & 0xFF30 ) == 0xfe80 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to site local
+			if( ( words[0] & 0xFC00 ) == 0xfc00 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // unique local
+			if( words[0] == 0x2001 && words[1] == 0xdb8 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; } // cannot send to example IP
 
 		}
 		else {
 			var addrparts = parts[1].split('.');
 			var words = [];
 			if( addrparts.length != 4 )
-				{ _debug&&console.trace( "FAIL" ); cb(false);return false; }
+				{ _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 			for( var n = 0; n < addrparts.length; n++ ) {
 				var val = parseInt( addrparts[n] );
 				if( val.toString() !== addrparts[n] )
-					{ _debug&&console.trace( "FAIL" ); cb(false);return false; }
-				if( val > 255 || val < 0 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+					{ _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+				if( val > 255 || val < 0 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 				words.push( val );
 			}
 			// disallow localhost addresses
-			if( words[0] == 192 && words[1] == 168 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-			if( words[0] == 172 && words[1] >= 16 && words[1] < 32 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-			if( words[0] == 10 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-			if( words[0] == 127 && words[1] == 0 && words[2] == 0 && words[3] == 1 ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+			if( words[0] == 192 && words[1] == 168 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+			if( words[0] == 172 && words[1] >= 16 && words[1] < 32 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+			if( words[0] == 10 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+			if( words[0] == 127 && words[1] == 0 && words[2] == 0 && words[3] == 1 ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 
 		}
 		return true;  // assume the IP in brackets is valid?
 	}
 	for( n = 0; n < domain.length; n++ ) {
-	_debug&&console.log( "domain part:", domain[n] );
+		_debug_email&&console.log( "domain part:", domain[n] );
 
 		if( domain[n].length < 1 || domain[n].length > 63 ) {
 			if( n == (domain.length-1) && domain[n].length === 0 )
 				continue;
-			{ _debug&&console.trace( "FAIL" ); cb(false);return false; }
+			{ _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 		}
-		if( domain[n][0] == '-' ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
-		if( domain[n][domain[n].length-1] == '-' ) { _debug&&console.trace( "FAIL" ); cb(false);return false; }
+		if( domain[n][0] == '-' ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
+		if( domain[n][domain[n].length-1] == '-' ) { _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 		var len = domain[n].length;
 
  		for( var m = 0; m < len; m++ ) {
 			if( !domainAllowedChars.includes( domain[n][m] ) )
-				{ _debug&&console.trace( "FAIL" ); cb(false);return false; }
+				{ _debug_email&&console.trace( "FAIL" ); cb(false);return false; }
 		}
 	}
 	lookupDomain( domain.join('.'), cb );
