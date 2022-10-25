@@ -18,16 +18,24 @@ export class Profile extends Popup {
 	constructor( parent ) {
 		super( "User Profile Manager", parent );
 		this.hide();
+		const this_ = this;
 		// this will ahve to be re-opened...
-		openSocket(null,(sock)=>{
-			this.#sock = sock;
-			this.#sock.on( "disconnect", ()=>{
-				console.log( "disconnect for login socket... probably OK... but will need it next time. ");
-			} );
-		} ); // trigger client begin connection... 
+		function connect() {
+			const socket = openSocket();
+			socket.then( (sock)=>{
+				this_.#sock = sock;
+				sock.on( "close", (code,reason)=>{
+					login.disconnect();
+					console.log( "disconnect for login socket... probably OK... but will need it next time. ", code, reason);
+					connect();
+				} );
+				sock.bindControls = connection.bindControls;
+				login.setClient( sock );
+			} ); // trigger client begin connection... 
+		}
 		
 		const login = l.login = popups.makeLoginForm( async (guest)=>{
-			console.log( "paraeter is guest?:", guest );
+			console.log( "parameter is guest?:", guest );
 			//console.log( "login form event" );
 			//debugger;
 			login.hide();
@@ -35,20 +43,26 @@ export class Profile extends Popup {
 			
 			console.log( "service information:", info );
 			if( info ) {
-				openSocket( info.addr, (ws)=>{
+				openSocket( info.addr, "profile" ).then( (ws)=>{
 					ws.onmessage = handleMessage;
 					ws.onclose = handleClose;
-					this.load();					
-				}, "profile" );
+					this_.load();					
+					return ws;
+				});
 			} else {
 				Alert( "Profile service failed to be found" );
 				login.show();
 			}
 
-		} , { useForm:"/ui/login/loginForm.html"
-		    , useSashForm:"/ui/login/pickSashForm.html"
-		    , sashScript : "/ui/login/pickSashForm.js"
-		    , wsLoginClient:connection} );
+		} , { useForm:"/login/loginForm.html"
+		    , useSashForm:"/login/pickSashForm.html"
+		    , sashScript : "/login/pickSashForm.js"
+			, ready() { // onLoad ?
+				connection.bindControls( login );
+
+			}
+		} );
+		connect();
 
 		
 

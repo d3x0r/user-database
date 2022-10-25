@@ -146,10 +146,23 @@ function openLoginServer( opts, cb )
 	console.log( "login serving on " + serverOpts.port );
 
 	// this connects my own service to me...
-	UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
+	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
 			, configPath:nearPath + "/"
+			, connect() {
+				console.log( 'service completed registration?')
+				coreService.on( "expect", expectUser );
+			}
 		 } );
 
+
+	function expectUser( uid, user ) {
+		const userId = sack.Id();
+		l.expect.get( userId, user )
+		console.trace( "Getting an expectation", uid, user )
+		return userId; // returning this ID is what the client will use for us...
+		// the login service will tell the client this response... 
+	}
+	
 	//console.table( nativeDisk.dir() );
 
 	class ServiceConnection {
@@ -207,15 +220,18 @@ function openLoginServer( opts, cb )
 
 	async function guestLogin( ws, msg ){
 
-		const isClient = await UserDb.getIdentifier( msg.clientId );
+		let isClient = await UserDb.getIdentifier( msg.clientId );
 		
 		if( !isClient ) {
-			console.log( "didn't know the client... ignoring ban result", msg.clientId, msg );
+			// happens from bleedover with local dev testing...
+			// happens changing working directory from one place to another.
+			isClient = await UserDb.makeIdentifier( msg.clientId );
+			//console.log( "didn't know the client... creating anyway", msg.clientId, msg );
 			//ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
 			//return;
 		}
 
-		const useClient = isClient || await UserDb.getIdentifier();
+		const useClient = isClient;
 		// 👻 or 😊 
 		if( msg.user.includes( "\u{FEFF}" ) ) {
 			console.log( "Includes bad character" );
@@ -231,10 +247,13 @@ function openLoginServer( opts, cb )
 
 		//console.log( "user:", user );
 		if( user ) {
-				sendKey( ws, "clientId", user.unique.key );
-				ws.state.user= user;
-				ws.send( JSON.stringify( { op:"guest", success: true } ));
-				return;
+			if( user.unique.key !== msg.clientId )
+				sendKey( ws, "clientId", user.unique.key ); // re-identify (leak association?)
+
+			console.log( "User is set in the client's ws.state (but not the services..." );
+			ws.state.user= user;
+			ws.send( JSON.stringify( { op:"guest", success: true } ));
+			return;
 		}
 		//console.log( "sending false" );
 		//console.log( "guest password failure" );
@@ -258,8 +277,11 @@ function openLoginServer( opts, cb )
 		if( user && user.unique !== isClient ) {
 			// save meta relation that these clients used the same localStorage
 			// reset client Id to this User.
-			console.log( "User Doing Login with another client:", user, user.unique );
-			sendKey( ws, "clientId", user.unique.key );
+			//console.log( "User Doing Login with another client:", user, user.unique );
+			if( user.unique.key !== isClient.key )
+				sendKey( ws, "clientId", user.unique.key );
+			else console.log( "unique is not yet UNIQUE..."
+					, user.unique.id, isClient.id, user.unique.key, isClient.key );
 			// force deviceId to null?
 			//msg.deviceId = null; // force generate new device for reversion
 		}
@@ -338,14 +360,15 @@ function openLoginServer( opts, cb )
 			const dev = await user.addDevice( msg.deviceId, ws.state.user.devices.length < 10?true:false );
 			//console.log( "dev:", dev );
 			if( !dev.active ) {
-				ws.send( JSON.stringify( {op:"login", success:false, inactive:true } ) );
+				ws.send( JSON.stringify( {op:"device", inactive:true } ) );
 				return;
 			}
-			ws.send( JSON.stringify( { op:"login", success: true } ));
+			ws.send( JSON.stringify( { op:"set", value:"deviceId", key:msg.deviceId } ) );
 		} else {
+			// can't attach a device to not a user.
 			console.log( "User Adding device was not found?? Bannable failure.", ws.state );
 			// out of sequence - there should be a pending login in need of a device ID.
-			ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
+			//ws.send( JSON.stringify( { op:"device", success: false, ban: true } ) );
 		}
 		
 	}
@@ -368,7 +391,8 @@ function openLoginServer( opts, cb )
 	async function newClient(ws,msg) {
 		ws.state.client = await UserDb.getIdentifier();
 		sendKey( ws, "clientId", ws.state.client.key );
-		UserDb.addIdentifier( ws.state.client );
+		// get adds now...
+		//UserDb.addIdentifier( ws.state.client );
 		l.newClients.push( { state:ws.state } );
 	}
 
@@ -381,7 +405,7 @@ function openLoginServer( opts, cb )
 			// this will wait until a client asks for this service; even on reconnect
 			const srvc = await UserDb.getService( ws, msg.svc );
 			//console.log( "Service:", srvc );
-			const inst = srvc.service.getServiceInstance( msg.sid, ws );
+			const inst = srvc.getServiceInstance( msg.sid, ws );
 			if( inst ){
 				console.log( "This is connecting the socket to the active instance..." );
 				inst.connect( ws );		
@@ -398,8 +422,8 @@ function openLoginServer( opts, cb )
 			//       , svc:{badges,description,domain,or,service}
 			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
 				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
-				//s = s.addInstance( ws );
-				//s.connect( ws );
+				s = s.addInstance( ws );
+				s.connect( ws );
 				//ws.send( JSOX.stringify( { op:"registered" }) )
 				return s;
 			} );
@@ -417,9 +441,10 @@ function openLoginServer( opts, cb )
 	function handleBadgeDef( ws, msg ){
 	}
 
-	async function getService( ws, msg ) {
+	async function getUserService( ws, msg ) {
 		// domain, service
 		//console.log( "Calling requestservice", ws.state );
+		console.log( "So this request should have a user..." );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
 		if( inst ) {
 			//console.log( "Service result:", inst, "for", msg );
@@ -490,6 +515,7 @@ function openLoginServer( opts, cb )
 			//console.log( 'profile Socket message:', msg );
 			if( !user ) {
 				user = l.expect.get( msg_ );
+				console.log( "Using message to look up expected user", msg_, user );
 				if( !user ) {
 					ws.send( JSOX.stringify( {op:"badIdentification"}));
 					ws.close( );
@@ -569,6 +595,7 @@ function openLoginServer( opts, cb )
 			const msg = JSOX.parse( msg_ );
 			//console.log( 'userLocal message:', msg );
 			if( msg.op === "register" ) {
+				console.log( "This will be a pending service registration");
 				handleServiceMsg( ws, msg );
 				//ws.send( methodMsg );
 			} else if( msg.op === "expect" ) {
@@ -584,22 +611,22 @@ function openLoginServer( opts, cb )
 
 		function handleClient( msg_ ) {
 			const msg = JSOX.parse( msg_ );
-			//console.log( 'UserDbServer message:', msg );
+			console.log( 'UserDbServer message:', msg, ws.state );
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
 				} else if( msg.op === "newClient" ){
 					newClient( ws, msg );
 				} else if( msg.op === "request" ){
-					getService( ws, msg );
+					getUserService( ws, msg );
+				} else if( msg.op === "service" ){
+					getUserService( ws, msg );
 				} else if( msg.op === "login" ){
 					doLogin( ws, msg );
 				} else if( msg.op === "device" ){
 					addDevice( ws, msg );
 				} else if( msg.op === "guest" ){
 					guestLogin( ws, msg );
-				} else if( msg.op === "service" ){
-					getService( ws, msg );
 				} else if( msg.op === "authorize" ){
 					doAuthorize( ws, msg );
 				} else if( msg.op === "Login" ){

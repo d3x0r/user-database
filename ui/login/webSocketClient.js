@@ -50,6 +50,8 @@ const l = {
 	loginForm: null,
 
 	bindControls(popup) {
+		l.loginForm = popup;
+
 		const f = popup.divFrame;
 
 		const form1 = f.querySelector("#loginForm");
@@ -223,18 +225,18 @@ function Alert(s) {
 }
 
 
-function processMessage(msg_) {
+function processMessage(ws,msg_) {
 	const msg = JSOX.parse(msg_);
-	if (l.ws.processMessage && l.ws.processMessage(l.ws, msg)) return;
+	if ( ws.processMessage && ws.processMessage(ws, msg)) return;
 
 	if (msg.op === "addMethod") {
 		try {
 			// why is this not in a module?
 			var f = new AsyncFunction("JSON", "Import", "connector", "Alert", msg.code);
-			const p = f.call(l.ws, JSOX, (i) => import(i), l, Alert);
+			const p = f.call(ws, JSOX, (i) => import(i), l, Alert);
 			l.connected = true;
-			if (l.loginForm)
-				l.loginForm.connect();
+			l.ws = ws;
+			if (l.loginForm) l.loginForm.connect();
 		} catch (err) {
 			console.log("Function compilation error:", err, "\n", msg.code);
 		}
@@ -248,9 +250,6 @@ function processMessage(msg_) {
 			Alert("Bannable Offense");
 		} else if (msg.device) {
 			//temporary failure, this device was unidentified, or someone elses
-			const newId = l.ws.SaltyRNG.Id();
-			localStorage.setItem("deviceId", newId);
-			l.ws.send(JSOX.stringify({ op: "device", deviceId: newId }));
 		} else
 			Alert("Login Failed...");
 
@@ -269,6 +268,8 @@ function processMessage(msg_) {
 			if (l.loginForm && l.loginForm.login)
 				l.loginForm.login(1);
 			//Alert(" Login Success" );			
+		} else if (msg.device) {
+			//temporary failure, this device was unidentified, or someone elses
 		} else if (msg.ban) {
 			Alert("Bannable Offense");
 		} else if (msg.account) {
@@ -299,41 +300,24 @@ async function pickSash(ws, choices) {
 
 
 
-async function openSocket(addr, cb, protocol) {
+async function openSocket(addr, protocol ) {
 	if (!workerInterface) {
 		await importing
 	}
 	return new Promise((res, rej) => {
 
 		let index = -1;
-		tryOne(addr);
-		//tryOne(towers[index]);
+		if( addr )
+			tryOne(addr);
+		else {
+			index++;
+			tryOne(towers[index]);
+		}
 		function tryOne(addr) {
-			//addr = addr || "wssd3x0r.org:8089" || location.host;
-			if (workerInterface)
-				workerInterface.connect(addr, protocol || "login", (statusmsg, msg) => {
-					if (statusmsg === true) {
-						if (cb) cb(msg);
-						else if ("object" === typeof msg) {
-							// msg is a websocket-like object
-							res(msg);
-							//console.log( "resolved with msg..." );
-						} else {
-							console.log("Dropped message:", msg);
-						}
-						l.ws = msg;
-						//console.log( "is websocket?", msg );
-
-					} else if( "string" === typeof statusmsg ) {
-						console.log( "post status message:", statusmsg );
-					}else {
-						console.log("!!!(NEXTSERVER?)connect got:", statusmsg);
-						index++; if( index < towers.length ) tryOne( towers[index] );
-					}
-				}, processMessage);
+			res( workerInterface.connect(addr, protocol || "login", processMessage) );
 		}
 
-	});
+	})
 }
 
 

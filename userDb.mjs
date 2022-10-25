@@ -2,6 +2,7 @@
 import {sack} from "sack.vfs"
 const JSOX=sack.JSOX;
 const stringifier = JSOX.stringifier();
+import config from "./config.jsox"
 
 import {BloomNHash} from "@d3x0r/bloomnhash"
 import {SlabArray}  from "@d3x0r/slab-array"
@@ -63,6 +64,10 @@ export class UniqueIdentifier extends StoredObject {
 	created = new Date();
 	constructor() {
 		super(l.storage);
+	}
+	store( ) {
+		super.store();
+		console.log( "??? Store of identifier was called");
 	}
 	addUser( user,account,email,pass ){
 		//if( "string" !== typeof pass ) throw new Error( "Please pass a string as a password" );
@@ -380,38 +385,77 @@ export class Domain  extends StoredObject{
 
 	async getService( name, forUser ) {
 		let promises = [];
-		let foundSrvc = null;
-		//console.log( "---------------------------- GETTING SERVICE FROM DOMAIN:", name, forUser, this );
-		const srvc = this.services.find( async (srvc,idx)=>{
-			if( srvc instanceof Promise ) {
-				promises.push( srvc );
-				srvc = await l.storage.map( srvc );
-				console.log( "does map result with the service?", srvc );
-				//srvc = this.services[idx];
-				if( srvc.name === name ) {
-					foundSrvc = srvc;
+		let resolved = false;
+		
+		const srvc = await new Promise( (res,rej)=>{
+			//console.log( "---------------------------- GETTING SERVICE FROM DOMAIN:", name, forUser, this );
+			const srvc = this.services.find( (srvc,idx)=>{
+				if( srvc instanceof Promise ) {
+					srvc.then( (srvc)=>{
+						if( srvc.name === name ){
+							resolved = true;
+							res( srvc );
+						}
+					})
+					promises.push( srvc );
+					l.storage.map( srvc );
+					return false;
 				}
-				return false;
+				return( srvc.name===name );
+			} );
+			//console.log( "domain.getservice result blah (reload not null, create is null?)", srvc );
+			if( !srvc ) {
+				if( !promises.length) {
+					// don't allow guests to create services.
+					//console.log( "Create new service is by guest?", forUser );
+					if( (!config.allowGuestServices) && forUser.guest ) {
+						res( null );
+						return;
+					}
+
+					console.log( "Registrations?", l.registrations );
+					for( let r = 0; r < l.registrations.length; r++ ) {
+						const regPending = l.registrations[r];
+						const reg = regPending.msg;
+						if( reg.domain === this.name ) {
+							if( reg.service === name ) {
+								const newSrvc = new Service().set( this, name, forUser );
+								UserDb.on( "newService", newSrvc );
+								//console.log( "----------------------------------------- SERVICE STORE HERE -------------------------------------" );
+								newSrvc.store();
+								this.services.push( newSrvc );
+								this.store();			
+								
+								const badges = newSrvc.makeBadges( reg.badges, forUser );
+								if(0) {
+									const inst = newSrvc.addInstance( regPending.ws );
+								}
+								// resolve the registration
+								regPending.then( (a)=>{
+									console.log( "Service has been notified of it's SID, this can now tell it to expec this user?")
+									return a;
+								})
+								regPending.res( newSrvc );
+								l.registrations.splice( r, 1 );
+		
+								//console.log( 'authorize...', svc, stringifier.stringify( org ) );
+								// radio the service ahead of time, allowing the service to setup for the user
+								// gets back a connection token and address...
+								//const redirect = svc.authorize( forUser );
+								return newSrvc;
+							}
+						}
+					}
+					// not pending, not known, now what?
+					res( null );
+				}
+				else Promise.all( promises ).then( ()=>{
+					if( !resolved ) rej();					 
+				});
+			}else {
+				res( srvc );
 			}
-			return( srvc.name===name );
 		} );
-		//console.log( "domain.getservice result blah (reload not null, create is null?)", srvc );
-		if( !srvc ) {
-			if( !promises.length) {
-				// don't allow guests to create services.
-				if( forUser.guest ) return null;
-
-				const newSrvc = new Service().set( this, name, forUser );
-				UserDb.on( "newService", newSrvc );
-				//console.log( "----------------------------------------- SERVICE STORE HERE -------------------------------------" );
-				newSrvc.store();
-				this.services.push( newSrvc );
-				this.store();			
-				return newSrvc;
-			}
-			return Promise.all( promises ).then( ()=>foundSrvc );
-		}
-
 		return srvc;				
 	}
 }
@@ -797,7 +841,7 @@ export class User  extends StoredObject{
 	}
 
 	async getSash( domain ) {
-		if( this.guest ) return { guest:true };
+		if( (!config.allowGuestServices) && this.guest ) return { guest:true };
 		const badges = {};
 		const found = [];
 		let s = 0;
@@ -862,6 +906,7 @@ export class Device  extends StoredObject{
 
 let getUser = null;
 let getIdentifier = null;
+let makeIdentifier = null;
 
 async function userActsAs( user, act ) {
 	const active = l.actAs.get( user );
@@ -936,10 +981,22 @@ const UserDb = {
 		getUser = (id)=>{
 			return User.get( id );
 		};
-		getIdentifier = ()=>{
+		getIdentifier = getIdentifier_;
+		async function getIdentifier_(){
 			const unique = new UniqueIdentifier();
 			unique.key = sack.Id();
 			unique.hook( storage );
+			unique.store();
+			await UserDb.addIdentifier( unique);
+			return unique;
+		}
+		makeIdentifier = makeIdentifier_;
+		async function makeIdentifier_(id){
+			const unique = new UniqueIdentifier();
+			unique.key = id;
+			unique.hook( storage );
+			unique.store();
+			await UserDb.addIdentifier( unique);
 			return unique;
 		}
 		const root = await storage.getRoot();
@@ -1043,25 +1100,38 @@ const UserDb = {
 	},
 	User:User,
 	async getIdentifier( i ) {
-		if( i ) return await l.clients.get( i );
+		if( i ) {
+
+			return l.clients.get( i ).then( (i)=>{
+				if( !i.id ){
+					console.log( "make sure we update to be a stored object?");
+					debugger;
+					i.store();
+					l.clients.store();
+				}
+				return i;
+			});
+		}
 		return getIdentifier();
 	},
+	async makeIdentifier( i ) {
+		return makeIdentifier(i);
+	},
         async addIdentifier( i ) {
-		
-            	return l.clients.set( i.key, i );
+			
+            return l.clients.set( i.key, i );
         },
-        async getOrg( i ) {
-		
-            	return l.clients.set( i.key, i );
+        async getOrg( i ) {		
+            	return l.orgs.get( i.key, i );
         },
 	Device:Device,
 	UniqueIdentifier:UniqueIdentifier,
 	socketHandleRequest,
 	// register a service... this essentially blocs 
 	async getService( ws, service ) {
-		//console.trace( "GET service:", ws, service );
-		const org = await Organization.get( service.org );
-		if( !org ) {
+		console.log( 'this is called when a service registers...')
+		function defer() {
+			console.log( "Service:", service, " has to wait for registration...");
 			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;
@@ -1070,56 +1140,30 @@ const UserDb = {
 			l.registrations.push( reg );
 			return reg.p;
 		}
+		//if( !ws.state.user ) return defer();
+		//console.trace( "GET service:", ws, service );
+		const org = await Organization.get( service.org );
+		if( !org ) return defer();
 		const dmn = await org.getDomain( service.domain );
-		if( !dmn ) {
-			console.log( "Add domain, should result with adding domain..." );
-			return org.addDomain( service.domain );;
-		}
-		const oldService = await dmn.getService( service.service );
-		if( !oldService ) {
-			// this returns a service instance....
-			return dmn.addService( service.service );
-		}
-		console.log( "Resulting with service" );
+		if( !dmn ) return defer();
+		
+		console.log( "yes this is the client...")
+		const oldService = await dmn.getService( service.service, null );
+		if( !oldService ) return defer();
+		
+		console.log( "Resulting with service( unless defeerred)" );
 		return oldService;
 	},
 	async requestService( domain, service, forUser ) {
+
 		const oldDomain = await l.domains.get( domain );
 		const oldService = await oldDomain?.getService( service, forUser );
 
 		if( !oldDomain || !oldService ) {
 			// don't allow guests to create services.
-			if( forUser.guest ) return null;
 
-			console.log( "Registrations?", l.registrations );
-			for( let r = 0; r < l.registrations.length; r++ ) {
-				const regPending = l.registrations[r];
-				const reg = regPending.msg;
-				if( reg.domain === domain ) {
-					if( reg.service === service ) {
-						// this service needs to be created now...
-						//console.log( "Found a registration for a domain....", reg, forUser );
-						const org = ( await Organization.get( reg.org, forUser ) ) || ( await Organization.new( reg.org, forUser ) );	
-						//console.log( "Got org:", org );
-						const dmn = await org.getDomain( reg.domain, forUser );
-						//console.log( "Got domain:", dmn );
-						const svc = await dmn.getService( reg.service, forUser );
-						//console.log( "Got service:", svc );
-						const badges = await svc.makeBadges( reg.badges, forUser );
-
-						const inst = svc.addInstance( regPending.ws );
-						// resolve the registration
-						regPending.res( inst );
-						l.registrations.splice( r, 1 );
-
-						//console.log( 'authorize...', svc, stringifier.stringify( org ) );
-						// radio the service ahead of time, allowing the service to setup for the user
-						// gets back a connection token and address...
-						//const redirect = svc.authorize( forUser );
-						return inst;
-					}
-				}
-			}
+			if( !config.allowGuestServices && forUser.guest ) return null;
+			
 			console.trace( "Failed to find service...", domain, service );
 			return undefined;
 		} else {

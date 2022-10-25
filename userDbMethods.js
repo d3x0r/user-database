@@ -12,7 +12,6 @@ if (!clientKey) {
 	ws.send(`{op:newClient}`);
 }
 
-
 const l = {
 	pending: []
 }
@@ -48,6 +47,7 @@ ws.getService = function (domain, service) {
 
 const sesKey = localStorage.getItem("seskey");
 if (sesKey) {
+	// auto reconnect
 	ws.send(`{op:"Login",seskey:${JSON.stringify(sesKey)}
         		,clientId:${JSON.stringify(localStorage.getItem("clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("deviceId"))} }`);
@@ -55,6 +55,7 @@ if (sesKey) {
 }
 
 ws.request = function (domain, service) {
+	// like getService?  
 	const pend = { op: "request", id: SaltyRNG.Id(), p: null, domain: domain, service: service, res: null, rej: null };
 	ws.send(`{op:"request",id:'${pend.id}',domain:${JSON.stringify(domain)},service:${JSON.stringify(service)}}`);
 	pend.p = new Promise((res, rej) => {
@@ -81,9 +82,7 @@ ws.processMessage = function (ws, msg) {
 			ws.close(1000, "Client respecting ban, and resetting");
 		} else if (msg.device) {
 			//temporary failure, this device was unidentified, or someone elses
-			const newId = SaltyRNG.Id();
-			localStorage.setItem("deviceId", newId);
-			ws.send(JSON.stringify({ op: "device", deviceId: newId }));
+			ws.send(JSON.stringify({ op: "device", deviceId: SaltyRNG.Id() }));
 			return true;
 		} else
 			Alert("Login Failed...");
@@ -107,28 +106,25 @@ ws.processMessage = function (ws, msg) {
 		} else
 			Alert("Login Failed...");
 
-	}
-	else if (msg.op === "set") {
+	} else if (msg.op === "set") {
+		console.log( "directly set:", msg.value, msg.key );
 		localStorage.setItem(msg.value, msg.key);
 		return true; // client doesn't care.
-	}
-	else if (msg.op === "guest") {
+	} else if (msg.op === "guest") {
 		if (msg.success) {
 			;//Alert(" Login Success" );
 		} else
 			Alert("Login Failed...");
-
-	}
-	else if (msg.op === "set") {
-		localStorage.setItem(msg.value, msg.key);
-		return true; // client doesn't care.
 	} else if (msg.op === "expect") {
 		debugger;
 		ws.on( "expect", msg );
+	} else if (msg.op === "device") {
+		console.log( "Device specified is inactive - too many devices?" );
+		debugger;
+		ws.on( "deviceInactive", msg );
 	} else if (msg.op === "pickSash") {
 		// this is actually a client event.
-	}
-	else if (msg.op === "request") {
+	} else if (msg.op === "request") {
 		// reply from server
 		for (let pend of l.pending) {
 			if (pend.id === msg.id) {
@@ -140,6 +136,8 @@ ws.processMessage = function (ws, msg) {
 				}
 			}
 		}
+	} else {
+		console.log( "Server sent unhandled message:", msg );
 	}
 
 }

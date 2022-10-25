@@ -1,3 +1,5 @@
+// this is loaded with parameters...
+// (Import,on,PORT)
 const _debug_location = false;
 
 const ws = this;
@@ -29,7 +31,6 @@ const SaltyRNG = SaltyRNGModule.SaltyRNG;
 
 const l = {
 	badges : [],
-
 };
 
 const config = {
@@ -45,56 +46,44 @@ const config = {
 
 const loc = getLocation(); 
 
-
-srvc.loc=loc;
-srvc.addr=config.addresses;
-srvc.iaddr=config.internal_addresses;
+srvc.loc = loc;
+srvc.addr = config.addresses;
+srvc.iaddr = config.internal_addresses;
 srvc.port = PORT ;
 
 
-
-ws.addService = function( prod,app,interface ) {
-		
-}
-
-
 function registered( ws,msg ) {
+	// record accepted Service ID resulting from registration.
 	if( msg.ok ) {
 		// srvc result ok?
-		console.trace( "did I get SID?", msg, disk );
-		mySID = msg.sid;
-		disk.write( "fs/mySid.jsox", msg.sid );
+		//console.trace( "did I get SID?", msg, disk );
+		if( mySID === msg.sid ){
+			mySID = msg.sid;
+			disk.write( "fs/mySid.jsox", msg.sid );
+		}
+		ws.on( "connect", true );
 	} else {
 		console.log( "Failed to register Self" );
 	}
 }
 
-function acceptUser( ws, msg ) {
-	
-}
-
 const events = {};
 
-ws.on = function( evt, d ) {
-	return on( evt, d );
-}
+ws.on = on
 
 ws.processMessage = function( msg ) {
-	console.trace( "handle message:", ws, msg );
+	//console.trace( "handle message:", ws, msg );
 	if( msg.op === "register" ) {
 		registered( ws, msg );
 		return true;
 	} else if( msg.op === "expect" ) {
-	        ws.send( JSOX.stringify( {op:'expect', id:msg.id
-						, addr:"this service's address?"
-						, key:on( "expect", msg ) } ) );
+		// this looks like just a reply.
+		// the message calls on("expect", msg ) in order
+		// to get a unique key to send to the connecting client.
+	    ws.send( JSOX.stringify( {op:'expect', id:msg.id
+					, addr:{ addr:srvc.addr, port:srvc.PORT }
+					, key:on( "expect", msg ) } ) );
 		return true;
-	} else if( msg.op === "authorize" ) {
-		// this has to be handled outside of this code
-		// otherwise need to register event handler
-		// on( "authorize", msg.user );		
-		//acceptUser( ws, msg );
-		console.log( "This seems to be inverted.." );
 	} else {
 		console.log( "Unhandled message from login server:", msg );
 	}
@@ -113,13 +102,6 @@ function registerService( srvc ) {
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
 	return p.p;
 }
-
-ws.onclose= function() {
-	// Add a second close handler for this.
-}
-
-
-
 
 
 

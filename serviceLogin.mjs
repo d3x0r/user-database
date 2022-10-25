@@ -1,29 +1,22 @@
 
 import {sack} from "sack.vfs";
-import {default as config} from "./config.jsox";
 
 const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
 
 //open( { protocol: "userDatabaseClient"
 //      , server : "ws://localhost:8089/"
+//      , servePort : // port this service is serving on.. 
 //    } );
 
 const l = {
-	expect : new Map(),
 	events : {},
 };
 
-function expectUser( ws, msg ){
-	const id = sack.Id();
-	l.expect.set( id, msg );
-	console.log( "login internal service request.... ", id );
-	return id;
-}
 
 function open( opts ) {
 	const protocol = opts?.protocol || "protocol";
 	const server = opts.server;
-	console.log( "connect with is:", server, protocol );
+	//console.log( "connect with is:", server, protocol );
 	var client = sack.WebSocket.Client( server, protocol, { perMessageDeflate: false } );
     client.opts = opts;
 	client.on("open", function ()  {
@@ -36,10 +29,8 @@ function open( opts ) {
 				try {
 					var f = new AsyncFunction( "Import", "on", "PORT", msg.code );
 					const p = f.call( ws, (m)=>import(m), UserDbRemote.on, opts.port );
-					p.then( ()=>{
-						
+					p.then( ()=>{						
 						if( opts.connect ) opts.connect( ws );
-						//ws.on( "expect", msg=>expectUser(this,msg) );
 					} );
 				} catch( err ) {
 					console.log( "Function compilation error:", err,"\n", msg.code );
@@ -47,14 +38,8 @@ function open( opts ) {
 			}
 			else {
 				if( this.processMessage && !this.processMessage( msg )  ){
-					if( msg.op === "authorize" ) {
-						// expect a connection from a user.
-						opts.authorize( msg.user );
-					}
-					else {
-						if( opts.processMessage && !this.processMessage( ws, msg, msg_ ) )
-							console.log( "unknown message Received:", msg );
-					}
+					if( opts.processMessage && !opts.processMessage( ws, msg, msg_ ) )
+						console.log( "unknown message Received:", msg );
 				}
 			}
        	};
@@ -75,14 +60,6 @@ function open( opts ) {
 } 
 
 
-
-
-function handleMessage( ws, msg ) {
-	if( msg.op === "addMethod" ) {
-		
-	}
-}
-
 export const UserDbRemote = {
 	open(opts) {
 		const realOpts = Object.assign( {}, opts );
@@ -91,9 +68,6 @@ export const UserDbRemote = {
 		const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8089 ;
 
 		realOpts.server = realOpts.server || "ws://localhost:"+port+"/";	
-		realOpts.authorize = (a)=>{
-			console.log( "authorize argument:", a );
-		}
 		return open(realOpts);
 	},
 	on( evt, d ) {
