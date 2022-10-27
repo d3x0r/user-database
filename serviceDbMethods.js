@@ -81,7 +81,7 @@ ws.processMessage = function( msg ) {
 		// the message calls on("expect", msg ) in order
 		// to get a unique key to send to the connecting client.
 	    ws.send( JSOX.stringify( {op:'expect', id:msg.id
-					, addr:{ addr:srvc.addr, port:srvc.PORT }
+					, addr:{ addr:srvc.addr, port:srvc.port }
 					, key:on( "expect", msg ) } ) );
 		return true;
 	} else {

@@ -53,7 +53,7 @@ function open( opts ) {
                 //client.send( "." );
 	} );
 
-	client.on( "close", function( codd, reason ) {
+	client.on( "close", function( code, reason ) {
       		console.log( "unopened connection closed", code, reason );
 	} );
 	return client;

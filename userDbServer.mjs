@@ -600,7 +600,7 @@ function openLoginServer( opts, cb )
 				//ws.send( methodMsg );
 			} else if( msg.op === "expect" ) {
 				// user connection expected on this connection...
-				//console.log( "Authorize sent - now e need to send back UID and IP")				
+				console.log( "Authorize sent - now e need to send back UID and IP", msg)				
 				UserDb.grant( msg.id, msg.key, msg.addr );
 				//ws.send( JSOX.stringify( { op:"authorize", id:msg.id, addr:msg.addr } ) );
 
