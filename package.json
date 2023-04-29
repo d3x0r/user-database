@@ -37,7 +37,7 @@
   "dependencies": {
     "@d3x0r/bloomnhash": "latest",
     "@d3x0r/popups": "latest",
-    "@d3x0r/socket-service": "latest",
+    "@d3x0r/socket-service": "https://github.com/d3x0r/socket-service",
     "@d3x0r/slab-array": "latest",
     "@d3x0r/srg2": "^1.0.0",
     "jsox": "latest",
