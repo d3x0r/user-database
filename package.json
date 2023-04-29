@@ -41,6 +41,6 @@
     "@d3x0r/slab-array": "latest",
     "@d3x0r/srg2": "^1.0.0",
     "jsox": "latest",
-    "sack.vfs": "latest"
+    "sack.vfs": "https://github.com/d3x0r/sack.vfs"
   }
 }
