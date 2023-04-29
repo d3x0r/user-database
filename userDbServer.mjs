@@ -2,6 +2,9 @@
 //console.log( "meta?", import.meta );
 //const _debug = true;
 const _debug_email = false;
+const enable_device_tracking = false;
+const track_unique_identifiers = false;
+
 import DNS from 'dns';
 
 const colons = import.meta.url.split(':');
@@ -12,12 +15,11 @@ const nearPath = where.substr(0, nearIdx );
 
 import path from "path";
 import {sack} from "sack.vfs"
-import {openServer} from "sack.vfs/apps/http-ws";
+import {openServer,getRequestHandler} from "sack.vfs/apps/http-ws";
 const nativeDisk = sack.Volume();
 import config from "./config.jsox"
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
-
-const withLoader = true;//process.env.SELF_LOADED;
+const withLoader = false;//process.env.SELF_LOADED;
 // make sure we load the import script
 if(0)
 	if( !withLoader ) {        
@@ -56,7 +58,11 @@ const serviceLoginScript = sack.Volume().read( nearPath+"/serviceLogin.mjs" ).to
 
 import {UserDbRemote} from "./serviceLogin.mjs";
 
-
+export const loginRequest = getRequestHandler(	{ 
+		resourcePath: nearPath + "/ui" ,
+		npmPath: nearPath
+		} );
+ 
 //import {UserDbServer} from "./userDbLoginService.mjs";
 //const methodMsg = JSON.stringify( {op:"addMethod", code:methods} );
 
@@ -136,10 +142,47 @@ function serviceRequestFilter( req, res ) {
 	}
 }
 
+	function accept( ws ) {
+		const protocol = ws.headers["Sec-WebSocket-Protocol"];
+
+		//console.log( "accept?", protocol );
+		if( protocol === "login" ){
+			this.accept();
+			return true;
+		} else if( protocol === "profile" ) {
+			this.accept();
+			return true;
+		} else if( protocol === "admin" ) {
+			this.accept();
+			return true;
+		} else if( protocol === "userDatabaseClient" ) {
+			const parts = ws.url.split( "?" );
+			if( parts.length > 1 ) {
+				const sid = parts[parts.length-1];
+				// this connects to a service by identifier.
+				const service = l.services.get(sid);
+				if( service ) {
+					this.accept();
+					return true;
+				} // otherwise it's an invalid connection... 		
+			}
+			else {
+				this.accept();
+				return true;
+			}
+		}
+		return false;
+		//this.reject();
+		//this.accept();
+	};
+export {accept as loginAccept}
+
 function openLoginServer( opts, cb )
 {
 	const serverOpts = opts;
-	const server = openServer( serverOpts, accept, connect );
+	const server = openServer( serverOpts
+		, function (ws){ if( !accept.call( this, ws ) ) this.reject() }  /// handle reject when hosting my own service.
+		, connect );
 	//server.addHandler( serviceRequestFilter );
 	server.addHandler( socketHandleRequest );
 	const disk = sack.Volume();
@@ -153,12 +196,12 @@ function openLoginServer( opts, cb )
 				coreService.on( "expect", expectUser );
 			}
 		 } );
-
+}
 
 	function expectUser( uid, user ) {
 		const userId = sack.Id();
 		l.expect.get( userId, user )
-		console.trace( "Getting an expectation", uid, user )
+		console.trace( "Getting an expectation", userId, user )
 		return userId; // returning this ID is what the client will use for us...
 		// the login service will tell the client this response... 
 	}
@@ -171,38 +214,6 @@ function openLoginServer( opts, cb )
 		constructor() {
 		}
 	}
-
-	function accept( ws ) {
-		const protocol = ws.headers["Sec-WebSocket-Protocol"];
-
-		//console.log( "accept?", protocol );
-		if( protocol === "login" )
-			return this.accept();
-		if( protocol === "profile" )
-			return this.accept();
-		if( protocol === "admin" )
-			return this.accept();
-		if( protocol === "userDatabaseClient" ) {
-			const parts = ws.url.split( "?" );
-			if( parts.length > 1 ) {
-				const sid = parts[parts.length-1];
-				// this connects to a service by identifier.
-				const service = l.services.get(sid);
-				if( service ) {
-					return this.accept();
-				} // otherwise it's an invalid connection... 		
-			}
-			else
-				return this.accept();
-		}
-
-		this.reject();
-		//this.accept();
-	};
-
-
-
-
 
 	function setKey( f, ws, val ) {
 		if( !f || f === "undefined") {
@@ -220,18 +231,21 @@ function openLoginServer( opts, cb )
 
 	async function guestLogin( ws, msg ){
 
-		let isClient = await UserDb.getIdentifier( msg.clientId );
+		if( track_unique_identifiers ) {
+			let isClient = await UserDb.getIdentifier( msg.clientId );
 		
-		if( !isClient ) {
-			// happens from bleedover with local dev testing...
-			// happens changing working directory from one place to another.
-			isClient = await UserDb.makeIdentifier( msg.clientId );
-			//console.log( "didn't know the client... creating anyway", msg.clientId, msg );
-			//ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
-			//return;
+			if( !isClient ) {
+				// happens from bleedover with local dev testing...
+				// happens changing working directory from one place to another.
+				isClient = await UserDb.makeIdentifier( msg.clientId );
+				//console.log( "didn't know the client... creating anyway", msg.clientId, msg );
+				//ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
+				//return;
+			}
+
+			const useClient = isClient;
 		}
 
-		const useClient = isClient;
 		// 👻 or 😊 
 		if( msg.user.includes( "\u{FEFF}" ) ) {
 			console.log( "Includes bad character" );
@@ -242,15 +256,14 @@ function openLoginServer( opts, cb )
 		const name = "\u{FEFF}👻" + msg.user;
 		//console.log( "Userdb Get User with:", name );
 		const user = ( await UserDb.getUser( name ) ) || 
-				(await useClient.addUser( name, sack.Id(), sack.Id()+"@d3x0r.org", "password" ) );
-
+				(await User.addUser( name, /*account*/sack.Id(), /*email*/sack.Id()+"@d3x0r.org", "password" ) );
 
 		//console.log( "user:", user );
 		if( user ) {
-			if( user.unique.key !== msg.clientId )
-				sendKey( ws, "clientId", user.unique.key ); // re-identify (leak association?)
+			//if( user.unique.key !== msg.clientId )
+			//	sendKey( ws, "clientId", user.unique.key ); // re-identify (leak association?)
 
-			console.log( "User is set in the client's ws.state (but not the services..." );
+			//console.log( "User is set in the client's ws.state (but not the services..." );
 			ws.state.user= user;
 			ws.send( JSON.stringify( { op:"guest", success: true } ));
 			return;
@@ -261,19 +274,20 @@ function openLoginServer( opts, cb )
 	}
 
 	async function doLogin( ws, msg ){
-
-		const isClient = await UserDb.getIdentifier( msg.clientId );
-		// just need SOME clientID.
-		if( !isClient ) {
-			console.log( "Login could not find the client by identifer:", msg );
-			ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
-			return;
+		if( track_unique_identifiers ) {
+			const isClient = await UserDb.getIdentifier( msg.clientId );
+			// just need SOME clientID.
+			if( !isClient ) {
+				console.log( "Login could not find the client by identifer:", msg );
+				ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
+				return;
+			}
+			//console.log( "login:", msg );
+			//console.log( "client:", isClient );
 		}
-		//console.log( "login:", msg );
-		//console.log( "client:", isClient );
-
 		const user = await UserDb.getUser( msg.account );
 		
+		/*
 		if( user && user.unique !== isClient ) {
 			// save meta relation that these clients used the same localStorage
 			// reset client Id to this User.
@@ -285,6 +299,7 @@ function openLoginServer( opts, cb )
 			// force deviceId to null?
 			//msg.deviceId = null; // force generate new device for reversion
 		}
+		*/
 
 		//console.log( "user:", user, msg.password );
 		if( !user || user.pass !== msg.password ) {
@@ -294,17 +309,19 @@ function openLoginServer( opts, cb )
 		
 		ws.state.user = user;
 		ws.state.login = msg;
-		const dev = await user.getDevice( msg.deviceId );
-		console.log( "dev:", dev );
-		if( !dev ) {
-			ws.state.login = msg;
-			// ask the device to add a device.
-			ws.send( JSON.stringify( {op:"login", success:false, device:true } ) );
-			return;
-		}
-		if( !dev.active ) {
-			ws.send( JSON.stringify( {op:"login", success:false, inactive:true } ) );
-			return;
+		if( enable_device_tracking ) {
+			const dev = await user.getDevice( msg.deviceId );
+			console.log( "dev:", dev );
+			if( !dev ) {
+				ws.state.login = msg;
+				// ask the device to add a device.
+				ws.send( JSON.stringify( {op:"login", success:false, device:true } ) );
+				return;
+			}
+			if( !dev.active ) {
+				ws.send( JSON.stringify( {op:"login", success:false, inactive:true } ) );
+				return;
+			}
 		}
 		//console.log( "sending false" );
 		ws.send( JSON.stringify( { op:"login", success: true } ));
@@ -328,11 +345,13 @@ function openLoginServer( opts, cb )
 			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
 			return;
 		}
-		const unique = await UserDb.getIdentifier( msg.clientId );//new UniqueIdentifier();
-		if( !unique ) {                              
-			//console.log( "Resulting with a reset of client ID." );
-			ws.send( JSON.stringify( { op:"create", success: false, ban: true } ) );
-			return;
+		if( track_unique_identifiers ) {
+			const unique = await UserDb.getIdentifier( msg.clientId );//new UniqueIdentifier();
+			if( !unique ) {                              
+				//console.log( "Resulting with a reset of client ID." );
+				ws.send( JSON.stringify( { op:"create", success: false, ban: true } ) );
+				return;
+			}
 		}
 
 		const oldUser = await UserDb.User.get( msg.account );
@@ -346,7 +365,7 @@ function openLoginServer( opts, cb )
 			return;
 		}
 
-		const user = await unique.addUser( msg.user, msg.account, msg.email, msg.password );
+		const user = await User.addUser( msg.user, msg.account, msg.email, msg.password );
 		//console.log( "user created:", user );
 		ws.state.user= user;
 		ws.state.user.authorize = true;
@@ -411,7 +430,8 @@ function openLoginServer( opts, cb )
 				inst.connect( ws );		
 			} else {
 				console.log(" THis is adding a new instance for that service; BAD id recovery");
-				srvc.service.addInstance( ws); // does connect also.
+				//console.log( "And no service?", srvc );
+				srvc./*service.*/addInstance( ws); // does connect also.
 				//inst.connect( ws );
 			}
 		} 
@@ -489,8 +509,21 @@ function openLoginServer( opts, cb )
 			//console.log( "send greeting message, setting up events" );
 			ws.onmessage = handleClient;
 			ws.send( methodMsg );
-		}
+		} else 
+			return false;
 
+		ws.onclose = function() {
+				//console.log( "Remote closed" );
+			for( let s = 0; s < l.states.length; s++ ) {
+				const st = l.states[s];
+				if( st.ws === ws ) {
+					l.states.splice( s, 1 );
+				}
+			}
+		};
+
+		return true;
+		
 		function handlePeer( msg_ ) {
 			const msg = JSOX.parse( msg_ );
 			if( msg.op === "getIndexes" ) {
@@ -615,7 +648,7 @@ function openLoginServer( opts, cb )
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
-				} else if( msg.op === "newClient" ){
+				} else if( track_unique_identifiers && msg.op === "newClient" ){
 					newClient( ws, msg );
 				} else if( msg.op === "request" ){
 					getUserService( ws, msg );
@@ -641,22 +674,11 @@ function openLoginServer( opts, cb )
 			} catch(err) {
 				console.log( "Something bad happened processing a message:", err );
 			}
-				//console.log( "Received data:", msg );
-			//ws.close();
-			};
-
-		ws.onclose = function() {
-				//console.log( "Remote closed" );
-			for( let s = 0; s < l.states.length; s++ ) {
-				const st = l.states[s];
-				if( st.ws === ws ) {
-					l.states.splice( s, 1 );
-				}
-			}
 		};
-	};
-}
 
+	};
+
+export {connect as loginConnect};
 
 function checkEmail( email ) {
 	return new Promise( (res,rej)=>{

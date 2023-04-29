@@ -6,10 +6,11 @@ const SaltyRNGModule = await Import("/node_modules/@d3x0r/srg2/salty_random_gene
 const SaltyRNG = SaltyRNGModule.SaltyRNG;
 //ws.SaltyRNG = SaltyRNG;
 
-
-const clientKey = localStorage.getItem("clientId");
-if (!clientKey) {
-	ws.send(`{op:newClient}`);
+if(false) {
+	const clientKey = localStorage.getItem("clientId");
+	if (!clientKey) {
+		ws.send(`{op:newClient}`);
+	}
 }
 
 const l = {

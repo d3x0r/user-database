@@ -69,18 +69,6 @@ export class UniqueIdentifier extends StoredObject {
 		super.store();
 		console.log( "??? Store of identifier was called");
 	}
-	addUser( user,account,email,pass ){
-		//if( "string" !== typeof pass ) throw new Error( "Please pass a string as a password" );
-		const newUser = new User();
-		newUser.hook( this );
-		newUser.account = ''+account;
-		newUser.name = ''+user;
-		newUser.email = ''+email;
-		newUser.pass = ''+pass;
-		newUser.unique = this;
-		newUser.store();
-		return newUser;
-	}
 }
 
 // - - -  - - - - - - - -  -- - - - - - - ---  -- - - - - - - - - - -  -- - - - - -- -
@@ -774,6 +762,18 @@ export class User  extends StoredObject{
 		this.guest = false;
 		this.store();
 	}
+	static addUser( user,account,email,pass ){
+		//if( "string" !== typeof pass ) throw new Error( "Please pass a string as a password" );
+		const newUser = new User();
+		//newUser.hook( l.storage );
+		newUser.account = ''+account;
+		newUser.name = ''+user;
+		newUser.email = ''+email;
+		newUser.pass = ''+pass;
+		newUser.unique = null;
+		newUser.store();
+		return newUser;
+	}
 	store() {
 		return super.store().then( async (id)=>{	
 			//console.log( "what about?", id, l );
@@ -1101,15 +1101,18 @@ const UserDb = {
 	User:User,
 	async getIdentifier( i ) {
 		if( i ) {
-
-			return l.clients.get( i ).then( (i)=>{
-				if( !i.id ){
+			console.log( "clients to get ID fails?", i );
+			return l.clients.get( i ).then( (id)=>{
+				if( !id ) {
+					console.trace( "Why did something get id null?", i, id );
+				}
+				if( id && !id.id ){
 					console.log( "make sure we update to be a stored object?");
 					debugger;
-					i.store();
+					id.store();
 					l.clients.store();
 				}
-				return i;
+				return id;
 			});
 		}
 		return getIdentifier();
