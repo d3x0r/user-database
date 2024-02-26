@@ -17,7 +17,7 @@ import path from "path";
 import {sack} from "sack.vfs"
 import {openServer,getRequestHandler} from "sack.vfs/apps/http-ws";
 const nativeDisk = sack.Volume();
-import config from "./config.jsox"
+const config = await import( process.cwd()+"/config.jsox" );
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 const withLoader = false;//process.env.SELF_LOADED;
 // make sure we load the import script

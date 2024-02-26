@@ -2,7 +2,7 @@
 import {sack} from "sack.vfs"
 const JSOX=sack.JSOX;
 const stringifier = JSOX.stringifier();
-import config from "./config.jsox"
+const config = await import( process.cwd()+"/config.jsox" );
 
 import {BloomNHash} from "@d3x0r/bloomnhash"
 import {SlabArray}  from "@d3x0r/slab-array"
