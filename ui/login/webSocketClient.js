@@ -298,6 +298,13 @@ async function pickSash(ws, choices) {
 	ws.send({ op: "pickSash", ok: false, sash: "Choice not possible." });
 }
 
+function status( msg, arg ) {
+	if( "string" ===typeof( msg ) ) {
+		console.log( "Service worker sent status:", msg );
+	} else if( msg === true ) {
+		console.log( "Opening socketid:", arg );
+	}
+}
 
 
 async function openSocket(addr, protocol ) {
@@ -314,7 +321,7 @@ async function openSocket(addr, protocol ) {
 			tryOne(towers[index]);
 		}
 		function tryOne(addr) {
-			res( workerInterface.connect(addr, protocol || "login", processMessage) );
+			res( workerInterface.connect(addr, protocol || "login", status, processMessage) );
 		}
 
 	})
