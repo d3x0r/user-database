@@ -11,6 +11,7 @@ const colons = import.meta.url.split(':');
 const where = colons.length===2?colons[1].substr(1):colons[2];
 const nearIdx = where.lastIndexOf( "/" );
 const nearPath = where.substr(0, nearIdx );
+console.log( "nearpath is parent?", nearPath )
 //console.log( "environment:", process.env );
 
 import path from "path";
@@ -19,7 +20,7 @@ import {openServer,getRequestHandler} from "sack.vfs/apps/http-ws";
 const nativeDisk = sack.Volume();
 const config = await import( process.cwd()+"/config.jsox" );
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
-const withLoader = false;//process.env.SELF_LOADED;
+const withLoader = true;//process.env.SELF_LOADED;
 // make sure we load the import script
 if(0)
 	if( !withLoader ) {        
@@ -59,8 +60,8 @@ const serviceLoginScript = sack.Volume().read( nearPath+"/serviceLogin.mjs" ).to
 import {UserDbRemote} from "./serviceLogin.mjs";
 
 export const loginRequest = getRequestHandler(	{ 
-		resourcePath: nearPath + "/ui" ,
-		npmPath: nearPath
+		resourcePath: nearPath + "/../ui" ,
+		npmPath: nearPath+"../"
 		} );
  
 //import {UserDbServer} from "./userDbLoginService.mjs";
@@ -92,10 +93,10 @@ const resourcePerms = {
 
 // go is from userDb; waits for database to be ready.
 if( withLoader ) go.then( ()=>{
-	const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8089 ;
+	const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8600 ;
 	const serverOpts = { port ,
-		resourcePath: nearPath + "/ui" ,
-		npmPath: nearPath
+		resourcePath: nearPath + "/../ui" ,
+		npmPath: nearPath + "/.."
 		};
 	console.log( "serving from?", serverOpts );
 	if( config.certPath ) Object.assign( serverOpts, { 
@@ -130,13 +131,14 @@ UserDb.on( "pickSash", (user, choices)=>{
 function serviceRequestFilter( req, res ) {
 	console.log( "userDbServer req filter:", req.url );
 	if( req.url == "/serviceLogin.mjs" ) {
-		const filePath = nearPath + req.url;
-
+		let filePath = nearPath + "/../ui"+ req.url;
+		if( nativeDisk.isDir( filePath ) ) filePath += "/index.html"; 
 		if( nativeDisk.exists( filePath ) ) {
 			const headers = { 'Content-Type': "text/javascript", 'Access-Control-Allow-Origin' : req.connection.headers.Origin };
 			//if( contentEncoding ) headers['Content-Encoding']=contentEncoding;
 			res.writeHead(200, headers );
 			res.end( nativeDisk.read( filePath ) );
+console.log( "--- write head --- " );
 			return true;
 		}
 	}
@@ -190,7 +192,7 @@ function openLoginServer( opts, cb )
 
 	// this connects my own service to me...
 	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
-			, configPath:nearPath + "/"
+			, configPath:process.cwd() + "/"
 			, connect() {
 				console.log( 'service completed registration?')
 				coreService.on( "expect", expectUser );

@@ -65,7 +65,9 @@ export const UserDbRemote = {
 		const realOpts = Object.assign( {}, opts );
 		realOpts.protocol= "userDatabaseClient";
 		//realOpts.
-		const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8089 ;
+
+// this is a loopback into self ... 
+		const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8600 ;
 
 		realOpts.server = realOpts.server || "ws://localhost:"+port+"/";	
 		return open(realOpts);
