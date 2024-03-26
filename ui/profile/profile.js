@@ -57,8 +57,8 @@ export class Profile extends Popup {
 		} , { useForm:"/login/loginForm.html"
 		    , useSashForm:"/login/pickSashForm.html"
 		    , sashScript : "/login/pickSashForm.js"
-			, ready() { // onLoad ?
-				connection.bindControls( login );
+			, ready(root) { // onLoad ?
+				connection.bindControls( login, root );
 
 			}
 		} );

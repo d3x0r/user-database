@@ -5,7 +5,7 @@ const _debug_location = false;
 const ws = this;
 //console.log( "Extend this websocket:", this );
 
-const serviceConfig = (await Import(process.cwd()+"/config.jsox")).default;
+const serviceConfig = (await Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox")).default;
 const configPath = ws.opts.configPath || "";
 
 const os = await Import( "os" );

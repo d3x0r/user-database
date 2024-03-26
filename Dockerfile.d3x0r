@@ -1,5 +1,5 @@
 
-FROM d3x0r/node-alpine-run as d3x0r-node-alpine
+FROM d3x0r/node-run as node-run
 VOLUME fs
 
 copy . .

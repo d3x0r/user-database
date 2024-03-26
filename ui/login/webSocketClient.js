@@ -49,10 +49,10 @@ const l = {
 
 	loginForm: null,
 
-	bindControls(popup) {
+	bindControls(popup, root) {
 		l.loginForm = popup;
 
-		const f = popup.divFrame;
+		const f = root;
 
 		const form1 = f.querySelector("#loginForm");
 

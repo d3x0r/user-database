@@ -18,7 +18,7 @@ import path from "path";
 import {sack} from "sack.vfs"
 import {openServer,getRequestHandler} from "sack.vfs/apps/http-ws";
 const nativeDisk = sack.Volume();
-const config = await import( process.cwd()+"/config.jsox" );
+const config = (await import( ((process.platform=="win32")?"file://":"")++process.cwd()+"/config.jsox" )).default;
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 const withLoader = true;//process.env.SELF_LOADED;
 // make sure we load the import script
@@ -59,6 +59,7 @@ const serviceLoginScript = sack.Volume().read( nearPath+"/serviceLogin.mjs" ).to
 
 import {UserDbRemote} from "./serviceLogin.mjs";
 
+console.log( "getting request handler?" );
 export const loginRequest = getRequestHandler(	{ 
 		resourcePath: nearPath + "/../ui" ,
 		npmPath: nearPath+"../"
@@ -107,9 +108,9 @@ if( withLoader ) go.then( ()=>{
 
        openLoginServer( 		serverOpts );
 } );
-else {
-	function doNothing() { setTimeout( doNothing, 10000000 ); } doNothing();
-}
+//else {
+//	function doNothing() { setTimeout( doNothing, 10000000 ); } doNothing();
+//}
 
 
 UserDb.on( "pickSash", (user, choices)=>{
