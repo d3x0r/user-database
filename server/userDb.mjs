@@ -1134,7 +1134,7 @@ const UserDb = {
 	async getService( ws, service ) {
 		console.log( 'this is called when a service registers...')
 		function defer() {
-			console.log( "Service:", service, " has to wait for registration...");
+			//console.log( "Service:", service, " has to wait for registration...");
 			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;

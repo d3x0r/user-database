@@ -150,18 +150,11 @@ console.log( "--- write head --- " );
 
 function openLoginServer( opts, cb )
 {
-	const serverOpts = opts;
-	const server = new Protocol();
-//openServer( serverOpts
-//		, function (ws){ if( !accept.call( this, ws ) ) this.reject() }  /// handle reject when hosting my own service.
-//		, connect );
-	//////server.addHandler( serviceRequestFilter );
-	//server.addHandler( socketHandleRequest );
-	const disk = sack.Volume();
-	console.log( "login serving on " + serverOpts.port );
+	const server = new Protocol( opts );
+	console.log( "login serving on " + opts.port );
 
 	// this connects my own service to me...
-	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
+	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+opts.port
 			, configPath:process.cwd() + "/"
 			, connect() {
 				console.log( 'service completed registration?')
@@ -172,10 +165,11 @@ function openLoginServer( opts, cb )
 
 
 export class UserServer extends Protocol {
-	constructor() {
-		super( serverOpts );
+	constructor( opts ) {
+		super( opts );
 		this.on("accept", (ws)=>this.accept(ws) );
 		this.on("connect", (ws,myWS)=>this.connect(myWS) );
+		this.addFileHandler();
 	}
 
 	accept(ws){
@@ -183,13 +177,10 @@ export class UserServer extends Protocol {
 
 		//console.log( "accept?", protocol );
 		if( protocol === "login" ){
-			this.accept();
 			return true;
 		} else if( protocol === "profile" ) {
-			this.accept();
 			return true;
 		} else if( protocol === "admin" ) {
-			this.accept();
 			return true;
 		} else if( protocol === "userDatabaseClient" ) {
 			const parts = ws.url.split( "?" );
@@ -198,24 +189,20 @@ export class UserServer extends Protocol {
 				// this connects to a service by identifier.
 				const service = l.services.get(sid);
 				if( service ) {
-					this.accept();
+					//this.accept();
 					return true;
 				} // otherwise it's an invalid connection... 		
 			}
 			else {
-				this.accept();
 				return true;
 			}
 		}
 		return false;
-		//this.reject();
-		//this.accept();
-		
 	}
 
 
-	connect(MyWS) {
-		const ws = MyWS.ws;
+	connect(ws) {
+		//const ws = MyWS.ws;
 		//console.log( "Connect:", ws );
 		const protocol = ws.headers["Sec-WebSocket-Protocol"];
 		let user = null;
@@ -223,26 +210,28 @@ export class UserServer extends Protocol {
 		ws.state = new LoginState( ws );
 		if( protocol === "userDatabaseClient" ) {
 			//console.log( "send greeting message, setitng up events" );
-			ws.onmessage = handleService;
-			ws.onclose = closeService;
+			
+			ws.on("message", handleService );
+			ws.on("close", closeService );
 			//console.log( "sending service fragment" );
 			ws.send( serviceMethodMsg );
 		} else if( protocol === "admin" ){
-			ws.onmessage = handleAdmin;
+			ws.on("message", handleAdmin);
 		} else if( protocol === "profile" ){
-			ws.onmessage = handleProfile;
+			ws.on("message", handleProfile);
 		} else if( protocol === "userDatabasePeer" ){
-			ws.onmessage = handlePeer;
+			ws.on("message", handlePeer);
 			negotiatePeer();
 		} else if( protocol === "login" ){
 			//console.log( "send greeting message, setting up events" );
-			ws.onmessage = handleClient;
+			ws.on("message", handleClient);
 			ws.send( methodMsg );
 		} else 
 			return false;
 
-		ws.onclose = function() {
+		ws.ws.onclose = function(code,reason) {
 				//console.log( "Remote closed" );
+			ws.on("close", [code,reason] );	
 			for( let s = 0; s < l.states.length; s++ ) {
 				const st = l.states[s];
 				if( st.ws === ws ) {
@@ -253,7 +242,7 @@ export class UserServer extends Protocol {
 
 		return true;
 		
-		function handlePeer( msg_ ) {
+		function handlePeer( ws, msg_ ) {
 			const msg = JSOX.parse( msg_ );
 			if( msg.op === "getIndexes" ) {
 				const indexes = UserDb.getIndexes();
@@ -273,7 +262,7 @@ export class UserServer extends Protocol {
 
 		}
 
-		function handleProfile( msg_ ) {
+		function handleProfile( ws, msg_ ) {
 			//console.log( 'profile Socket message:', msg );
 			if( !user ) {
 				user = l.expect.get( msg_ );
@@ -309,7 +298,7 @@ export class UserServer extends Protocol {
 		}
 
 
-		function handleAdmin( msg_ ) {
+		function handleAdmin( ws, msg_ ) {
 			//console.log( 'admin Socket message:', msg );
 			if( !user ) {
 				user = l.expect.get( msg_ );
@@ -342,7 +331,7 @@ export class UserServer extends Protocol {
 			}
 		}
 
-		function doAuthorize( msg ) {
+		function doAuthorize( ws, msg ) {
 			// msg.addr
 			// msg.key
 			
@@ -352,7 +341,7 @@ export class UserServer extends Protocol {
 			
 		}
 
-		function handleService( msg_ ) {
+		function handleService( ws, msg_ ) {
 			//console.log( "MSG:", msg_ );
 			const msg = JSOX.parse( msg_ );
 			//console.log( 'userLocal message:', msg );
@@ -371,7 +360,7 @@ export class UserServer extends Protocol {
 			}
 		}
 
-		function handleClient( msg_ ) {
+		function handleClient( ws, msg_ ) {
 			const msg = JSOX.parse( msg_ );
 			console.log( 'UserDbServer message:', msg, ws.state );
 			try {
