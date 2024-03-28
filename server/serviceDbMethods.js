@@ -6,7 +6,7 @@ const ws = this;
 //console.log( "Extend this websocket:", this );
 
 const serviceConfig = (await Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox")).default;
-const configPath = ws.opts.configPath || "";
+const configPath = opts.configPath || "";
 
 const os = await Import( "os" );
 const sackModule = await Import( "sack.vfs" );
@@ -49,7 +49,7 @@ const loc = getLocation();
 srvc.loc = loc;
 srvc.addr = config.addresses;
 srvc.iaddr = config.internal_addresses;
-srvc.port = PORT ;
+srvc.port = opts.port ;
 
 
 function registered( ws,msg ) {
