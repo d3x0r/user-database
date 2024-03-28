@@ -16,7 +16,8 @@ console.log( "nearpath is parent?", nearPath )
 
 import path from "path";
 import {sack} from "sack.vfs"
-import {openServer,getRequestHandler} from "sack.vfs/apps/http-ws";
+import {getRequestHandler} from "sack.vfs/apps/http-ws";
+import {Protocol} from "sack.vfs/protocol";
 const nativeDisk = sack.Volume();
 const config = (await import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox" )).default;
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
@@ -145,7 +146,39 @@ console.log( "--- write head --- " );
 	}
 }
 
-	function accept( ws ) {
+
+
+function openLoginServer( opts, cb )
+{
+	const serverOpts = opts;
+	const server = new Protocol();
+//openServer( serverOpts
+//		, function (ws){ if( !accept.call( this, ws ) ) this.reject() }  /// handle reject when hosting my own service.
+//		, connect );
+	//////server.addHandler( serviceRequestFilter );
+	//server.addHandler( socketHandleRequest );
+	const disk = sack.Volume();
+	console.log( "login serving on " + serverOpts.port );
+
+	// this connects my own service to me...
+	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
+			, configPath:process.cwd() + "/"
+			, connect() {
+				console.log( 'service completed registration?')
+				coreService.on( "expect", expectUser );
+			}
+		 } );
+}
+
+
+export class UserServer extends Protocol {
+	constructor() {
+		super( serverOpts );
+		this.on("accept", (ws)=>this.accept(ws) );
+		this.on("connect", (ws,myWS)=>this.connect(myWS) );
+	}
+
+	accept(ws){
 		const protocol = ws.headers["Sec-WebSocket-Protocol"];
 
 		//console.log( "accept?", protocol );
@@ -177,28 +210,204 @@ console.log( "--- write head --- " );
 		return false;
 		//this.reject();
 		//this.accept();
-	};
-export {accept as loginAccept}
+		
+	}
 
-function openLoginServer( opts, cb )
-{
-	const serverOpts = opts;
-	const server = openServer( serverOpts
-		, function (ws){ if( !accept.call( this, ws ) ) this.reject() }  /// handle reject when hosting my own service.
-		, connect );
-	//server.addHandler( serviceRequestFilter );
-	server.addHandler( socketHandleRequest );
-	const disk = sack.Volume();
-	console.log( "login serving on " + serverOpts.port );
 
-	// this connects my own service to me...
-	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+serverOpts.port
-			, configPath:process.cwd() + "/"
-			, connect() {
-				console.log( 'service completed registration?')
-				coreService.on( "expect", expectUser );
+	connect(MyWS) {
+		const ws = MyWS.ws;
+		//console.log( "Connect:", ws );
+		const protocol = ws.headers["Sec-WebSocket-Protocol"];
+		let user = null;
+		console.log( "protocol:", protocol )
+		ws.state = new LoginState( ws );
+		if( protocol === "userDatabaseClient" ) {
+			//console.log( "send greeting message, setitng up events" );
+			ws.onmessage = handleService;
+			ws.onclose = closeService;
+			//console.log( "sending service fragment" );
+			ws.send( serviceMethodMsg );
+		} else if( protocol === "admin" ){
+			ws.onmessage = handleAdmin;
+		} else if( protocol === "profile" ){
+			ws.onmessage = handleProfile;
+		} else if( protocol === "userDatabasePeer" ){
+			ws.onmessage = handlePeer;
+			negotiatePeer();
+		} else if( protocol === "login" ){
+			//console.log( "send greeting message, setting up events" );
+			ws.onmessage = handleClient;
+			ws.send( methodMsg );
+		} else 
+			return false;
+
+		ws.onclose = function() {
+				//console.log( "Remote closed" );
+			for( let s = 0; s < l.states.length; s++ ) {
+				const st = l.states[s];
+				if( st.ws === ws ) {
+					l.states.splice( s, 1 );
+				}
 			}
-		 } );
+		};
+
+		return true;
+		
+		function handlePeer( msg_ ) {
+			const msg = JSOX.parse( msg_ );
+			if( msg.op === "getIndexes" ) {
+				const indexes = UserDb.getIndexes();
+				ws.send( {op:"indexes:", ids:indexes.ids } );
+	
+			} else if( msg.op === "getIndexes" ) {
+				const indexes = UserDb.getIndexes();
+				ws.send( {op:"indexes:", ids:indexes.ids } );
+	
+			}
+			
+		}
+
+		function negotiatePeer() {
+			// tell peer some information about me?
+			// give the peer the script to be my peer?
+
+		}
+
+		function handleProfile( msg_ ) {
+			//console.log( 'profile Socket message:', msg );
+			if( !user ) {
+				user = l.expect.get( msg_ );
+				console.log( "Using message to look up expected user", msg_, user );
+				if( !user ) {
+					ws.send( JSOX.stringify( {op:"badIdentification"}));
+					ws.close( );
+					return;
+				}else
+					l.expect.delete( msg_ );
+				//console.log( "user connected!", user );
+			}else {
+				const is_ll = msg_[0] === "\0";
+				const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
+				if( is_ll && msg.op === "get" ){
+					//, {op:"get", url:url, id:newEvent.id } );
+					if( msg.url ){
+			                	const res = getResource( msg.url, null, user );
+						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
+					}
+					else
+						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:{code:0,content:"bad request",contentType:"text/plain"} } ) );
+					return true;
+				}
+				else if( msg.op === "" ){
+					if( !user.badges.edit ) {
+
+					}else {
+
+					}
+				}
+			}
+		}
+
+
+		function handleAdmin( msg_ ) {
+			//console.log( 'admin Socket message:', msg );
+			if( !user ) {
+				user = l.expect.get( msg_ );
+				if( !user ) {
+					ws.send( JSOX.stringify( {op:"badIdentification"}));
+					ws.close( );
+					return;
+				}else
+					l.expect.delete( msg_ );
+			}else {
+				const is_ll = msg_[0] === "\0";
+				const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
+				if( is_ll && msg.op === "get" ){
+					//, {op:"get", url:url, id:newEvent.id } );
+					if( msg.url ){
+			                	const res = getResource( msg.url, null, user );
+						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
+					}
+					else
+						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:{code:0,content:"bad request",contentType:"text/plain"} } ) );
+					return true;
+				}
+				else if( msg.op === "" ){
+					if( !user.badges.edit ) {
+
+					}else {
+
+					}
+				}
+			}
+		}
+
+		function doAuthorize( msg ) {
+			// msg.addr
+			// msg.key
+			
+		}
+
+		function closeService(code,reason ) {
+			
+		}
+
+		function handleService( msg_ ) {
+			//console.log( "MSG:", msg_ );
+			const msg = JSOX.parse( msg_ );
+			//console.log( 'userLocal message:', msg );
+			if( msg.op === "register" ) {
+				console.log( "This will be a pending service registration");
+				handleServiceMsg( ws, msg );
+				//ws.send( methodMsg );
+			} else if( msg.op === "expect" ) {
+				// user connection expected on this connection...
+				console.log( "Authorize sent - now e need to send back UID and IP", msg)				
+				UserDb.grant( msg.id, msg.key, msg.addr );
+				//ws.send( JSOX.stringify( { op:"authorize", id:msg.id, addr:msg.addr } ) );
+
+			} else {
+				console.log( "unhandled client admin/profile message:", msg_ );
+			}
+		}
+
+		function handleClient( msg_ ) {
+			const msg = JSOX.parse( msg_ );
+			console.log( 'UserDbServer message:', msg, ws.state );
+			try {
+				if( msg.op === "hello" ) {
+					//ws.send( methodMsg );
+				} else if( track_unique_identifiers && msg.op === "newClient" ){
+					newClient( ws, msg );
+				} else if( msg.op === "request" ){
+					getUserService( ws, msg );
+				} else if( msg.op === "service" ){
+					getUserService( ws, msg );
+				} else if( msg.op === "login" ){
+					doLogin( ws, msg );
+				} else if( msg.op === "device" ){
+					addDevice( ws, msg );
+				} else if( msg.op === "guest" ){
+					guestLogin( ws, msg );
+				} else if( msg.op === "authorize" ){
+					doAuthorize( ws, msg );
+				} else if( msg.op === "Login" ){
+					ws.send( JSON.stringify( { op:"login", success: true } ));
+				} else if( msg.op === "create" ){
+					doCreate( ws, msg );
+				} else if( msg.op === "pickSash" ){
+					pickedSash( ws, msg );
+				} else {
+					console.log( "Unhandled message:", msg );
+				}
+			} catch(err) {
+				console.log( "Something bad happened processing a message:", err );
+			}
+		};
+
+	}
+
+		
 }
 
 	function expectUser( uid, user ) {
@@ -489,199 +698,7 @@ function openLoginServer( opts, cb )
 		else          state.waits.pickSash.rej( msg.sash );
 	}
 
-	function connect(ws) {
-		//console.log( "Connect:", ws );
-		const protocol = ws.headers["Sec-WebSocket-Protocol"];
-		let user = null;
-		console.log( "protocol:", protocol )
-		ws.state = new LoginState( ws );
-		if( protocol === "userDatabaseClient" ) {
-			//console.log( "send greeting message, setitng up events" );
-			ws.onmessage = handleService;
-			ws.onclose = closeService;
-			//console.log( "sending service fragment" );
-			ws.send( serviceMethodMsg );
-		} else if( protocol === "admin" ){
-			ws.onmessage = handleAdmin;
-		} else if( protocol === "profile" ){
-			ws.onmessage = handleProfile;
-		} else if( protocol === "userDatabasePeer" ){
-			ws.onmessage = handlePeer;
-			negotiatePeer();
-		} else if( protocol === "login" ){
-			//console.log( "send greeting message, setting up events" );
-			ws.onmessage = handleClient;
-			ws.send( methodMsg );
-		} else 
-			return false;
 
-		ws.onclose = function() {
-				//console.log( "Remote closed" );
-			for( let s = 0; s < l.states.length; s++ ) {
-				const st = l.states[s];
-				if( st.ws === ws ) {
-					l.states.splice( s, 1 );
-				}
-			}
-		};
-
-		return true;
-		
-		function handlePeer( msg_ ) {
-			const msg = JSOX.parse( msg_ );
-			if( msg.op === "getIndexes" ) {
-				const indexes = UserDb.getIndexes();
-				ws.send( {op:"indexes:", ids:indexes.ids } );
-	
-			} else if( msg.op === "getIndexes" ) {
-				const indexes = UserDb.getIndexes();
-				ws.send( {op:"indexes:", ids:indexes.ids } );
-	
-			}
-			
-		}
-
-		function negotiatePeer() {
-			// tell peer some information about me?
-			// give the peer the script to be my peer?
-
-		}
-
-		function handleProfile( msg_ ) {
-			//console.log( 'profile Socket message:', msg );
-			if( !user ) {
-				user = l.expect.get( msg_ );
-				console.log( "Using message to look up expected user", msg_, user );
-				if( !user ) {
-					ws.send( JSOX.stringify( {op:"badIdentification"}));
-					ws.close( );
-					return;
-				}else
-					l.expect.delete( msg_ );
-				//console.log( "user connected!", user );
-			}else {
-				const is_ll = msg_[0] === "\0";
-				const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
-				if( is_ll && msg.op === "get" ){
-					//, {op:"get", url:url, id:newEvent.id } );
-					if( msg.url ){
-			                	const res = getResource( msg.url, null, user );
-						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
-					}
-					else
-						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:{code:0,content:"bad request",contentType:"text/plain"} } ) );
-					return true;
-				}
-				else if( msg.op === "" ){
-					if( !user.badges.edit ) {
-
-					}else {
-
-					}
-				}
-			}
-		}
-
-
-		function handleAdmin( msg_ ) {
-			//console.log( 'admin Socket message:', msg );
-			if( !user ) {
-				user = l.expect.get( msg_ );
-				if( !user ) {
-					ws.send( JSOX.stringify( {op:"badIdentification"}));
-					ws.close( );
-					return;
-				}else
-					l.expect.delete( msg_ );
-			}else {
-				const is_ll = msg_[0] === "\0";
-				const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
-				if( is_ll && msg.op === "get" ){
-					//, {op:"get", url:url, id:newEvent.id } );
-					if( msg.url ){
-			                	const res = getResource( msg.url, null, user );
-						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
-					}
-					else
-						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:{code:0,content:"bad request",contentType:"text/plain"} } ) );
-					return true;
-				}
-				else if( msg.op === "" ){
-					if( !user.badges.edit ) {
-
-					}else {
-
-					}
-				}
-			}
-		}
-
-		function doAuthorize( msg ) {
-			// msg.addr
-			// msg.key
-			
-		}
-
-		function closeService(code,reason ) {
-			
-		}
-
-		function handleService( msg_ ) {
-			//console.log( "MSG:", msg_ );
-			const msg = JSOX.parse( msg_ );
-			//console.log( 'userLocal message:', msg );
-			if( msg.op === "register" ) {
-				console.log( "This will be a pending service registration");
-				handleServiceMsg( ws, msg );
-				//ws.send( methodMsg );
-			} else if( msg.op === "expect" ) {
-				// user connection expected on this connection...
-				console.log( "Authorize sent - now e need to send back UID and IP", msg)				
-				UserDb.grant( msg.id, msg.key, msg.addr );
-				//ws.send( JSOX.stringify( { op:"authorize", id:msg.id, addr:msg.addr } ) );
-
-			} else {
-				console.log( "unhandled client admin/profile message:", msg_ );
-			}
-		}
-
-		function handleClient( msg_ ) {
-			const msg = JSOX.parse( msg_ );
-			console.log( 'UserDbServer message:', msg, ws.state );
-			try {
-				if( msg.op === "hello" ) {
-					//ws.send( methodMsg );
-				} else if( track_unique_identifiers && msg.op === "newClient" ){
-					newClient( ws, msg );
-				} else if( msg.op === "request" ){
-					getUserService( ws, msg );
-				} else if( msg.op === "service" ){
-					getUserService( ws, msg );
-				} else if( msg.op === "login" ){
-					doLogin( ws, msg );
-				} else if( msg.op === "device" ){
-					addDevice( ws, msg );
-				} else if( msg.op === "guest" ){
-					guestLogin( ws, msg );
-				} else if( msg.op === "authorize" ){
-					doAuthorize( ws, msg );
-				} else if( msg.op === "Login" ){
-					ws.send( JSON.stringify( { op:"login", success: true } ));
-				} else if( msg.op === "create" ){
-					doCreate( ws, msg );
-				} else if( msg.op === "pickSash" ){
-					pickedSash( ws, msg );
-				} else {
-					console.log( "Unhandled message:", msg );
-				}
-			} catch(err) {
-				console.log( "Something bad happened processing a message:", err );
-			}
-		};
-
-	};
-
-export {connect as loginConnect};
 
 function checkEmail( email ) {
 	return new Promise( (res,rej)=>{
