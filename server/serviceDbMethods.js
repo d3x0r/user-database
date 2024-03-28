@@ -1,12 +1,13 @@
 // this is loaded with parameters...
+//   (in a context that has ws, and opts)
 // (Import,on,PORT)
 const _debug_location = false;
 
 const ws = this;
 //console.log( "Extend this websocket:", this );
-
+console.log( "Service extension:", process.cwd() );
 const serviceConfig = (await Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox")).default;
-const configPath = ws.opts.configPath || "";
+const configPath = opts.configPath || "";
 
 const os = await Import( "os" );
 const sackModule = await Import( "sack.vfs" );
