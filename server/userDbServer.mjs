@@ -150,9 +150,8 @@ console.log( "--- write head --- " );
 
 function openLoginServer( opts, cb )
 {
-	const server = new Protocol( opts );
+	const server = new UserServer( opts );
 	console.log( "login serving on " + opts.port );
-
 	// this connects my own service to me...
 	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+opts.port
 			, configPath:process.cwd() + "/"
@@ -169,6 +168,7 @@ export class UserServer extends Protocol {
 		super( opts );
 		this.on("accept", (ws)=>this.accept(ws) );
 		this.on("connect", (ws,myWS)=>this.connect(myWS) );
+		console.log( "File handler is a protocol level handler... should only add once?" );
 		this.addFileHandler();
 	}
 
@@ -204,7 +204,7 @@ export class UserServer extends Protocol {
 	connect(ws) {
 		//const ws = MyWS.ws;
 		//console.log( "Connect:", ws );
-		const protocol = ws.headers["Sec-WebSocket-Protocol"];
+		const protocol = ws.ws.headers["Sec-WebSocket-Protocol"];
 		let user = null;
 		console.log( "protocol:", protocol )
 		ws.state = new LoginState( ws );
