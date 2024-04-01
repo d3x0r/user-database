@@ -28,7 +28,8 @@ const importing = import(here.origin + "/node_modules/@d3x0r/socket-service/swc.
 let isGuestLogin = false;
 let createMode = false;
 
-const towers = [location.protocol.replace("http", "ws") + "//" + location.host + "/",
+const towers = [here.protocol.replace("http","ws") + "//" + here.host + "/",
+	location.protocol.replace("http", "ws") + "//" + location.host + "/",
 	"wss://d3x0r.org:8089/",
 	"wss://poopfixer.com:8089/",
 

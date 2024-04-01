@@ -51,7 +51,7 @@ const loc = getLocation();
 srvc.loc = loc;
 srvc.addr = config.addresses;
 srvc.iaddr = config.internal_addresses;
-srvc.port = PORT ;
+srvc.port = opts.port ;
 
 
 function registered( client,msg ) {

@@ -27,8 +27,8 @@ function open( opts ) {
 			const msg = sack.JSOX.parse( msg_ );
 			if( msg.op === "addMethod" ) {
 				try {
-					var f = new AsyncFunction( "Import", "on", "PORT", msg.code );
-					const p = f.call( ws, (m)=>import(m), UserDbRemote.on, opts.port );
+					var f = new AsyncFunction( "Import", "on", "PORT", "opts", msg.code );
+					const p = f.call( ws, (m)=>import(m), UserDbRemote.on, opts.port, opts );
 					p.then( ()=>{						
 						if( opts.connect ) opts.connect( ws );
 					} );
