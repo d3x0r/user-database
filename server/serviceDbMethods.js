@@ -11,6 +11,7 @@ const configPath = opts.configPath || "";
 
 const os = await Import( "os" );
 const sackModule = await Import( "sack.vfs" );
+const {Events} = await Import( "sack.vfs/Events" );
 const sack = sackModule.sack;
 const JSOX = sack.JSOX;
 const disk = sack.Volume();
@@ -53,7 +54,7 @@ srvc.iaddr = config.internal_addresses;
 srvc.port = opts.port ;
 
 
-function registered( ws,msg ) {
+function registered( client,msg ) {
 	// record accepted Service ID resulting from registration.
 	if( msg.ok ) {
 		// srvc result ok?
@@ -62,7 +63,8 @@ function registered( ws,msg ) {
 			mySID = msg.sid;
 			disk.write( "fs/mySid.jsox", msg.sid );
 		}
-		ws.on( "connect", true );
+		console.log( "issue registered connect here..." );
+		client.on( "connect", true );
 	} else {
 		console.log( "Failed to register Self" );
 	}
@@ -70,20 +72,20 @@ function registered( ws,msg ) {
 
 const events = {};
 
-ws.on = on
+//ws.on = on
 
-ws.processMessage = function( msg ) {
+socket.processMessage = function( msg ) {
 	//console.trace( "handle message:", ws, msg );
 	if( msg.op === "register" ) {
-		registered( ws, msg );
+		registered( client, msg );
 		return true;
 	} else if( msg.op === "expect" ) {
 		// this looks like just a reply.
 		// the message calls on("expect", msg ) in order
 		// to get a unique key to send to the connecting client.
-	    ws.send( JSOX.stringify( {op:'expect', id:msg.id
+	    client.send( {op:'expect', id:msg.id
 					, addr:{ addr:srvc.addr, port:srvc.port }
-					, key:on( "expect", msg ) } ) );
+					, key:on( "expect", msg ) } );
 		return true;
 	} else {
 		console.log( "Unhandled message from login server:", msg );
@@ -97,8 +99,8 @@ if( srvc instanceof Array ) {
 	registerService( srvc, srvc.badges );
 
 function registerService( srvc ) {
-	//console.log( "Blah:", serviceConfig, serviceConfig.publicAddresses );
-	ws.send( JSOX.stringify( { op:"register", sid:mySID, svc:srvc } ) );
+	console.log( "Registering serivce:", serviceConfig, serviceConfig.publicAddresses );
+	client.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
 	return p.p;
