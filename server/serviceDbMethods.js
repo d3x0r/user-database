@@ -54,7 +54,7 @@ srvc.iaddr = config.internal_addresses;
 srvc.port = opts.port ;
 
 
-function registered( client,msg ) {
+function registered( socket,msg ) {
 	// record accepted Service ID resulting from registration.
 	if( msg.ok ) {
 		// srvc result ok?
@@ -64,7 +64,7 @@ function registered( client,msg ) {
 			disk.write( "fs/mySid.jsox", msg.sid );
 		}
 		console.log( "issue registered connect here..." );
-		client.on( "connect", true );
+		socket.on( "connect", true );
 	} else {
 		console.log( "Failed to register Self" );
 	}
@@ -77,13 +77,13 @@ const events = {};
 socket.processMessage = function( msg ) {
 	//console.trace( "handle message:", ws, msg );
 	if( msg.op === "register" ) {
-		registered( client, msg );
+		registered( socket, msg );
 		return true;
 	} else if( msg.op === "expect" ) {
 		// this looks like just a reply.
 		// the message calls on("expect", msg ) in order
 		// to get a unique key to send to the connecting client.
-	    client.send( {op:'expect', id:msg.id
+	    socket.send( {op:'expect', id:msg.id
 					, addr:{ addr:srvc.addr, port:srvc.port }
 					, key:on( "expect", msg ) } );
 		return true;
@@ -100,7 +100,7 @@ if( srvc instanceof Array ) {
 
 function registerService( srvc ) {
 	console.log( "Registering serivce:", serviceConfig, serviceConfig.publicAddresses );
-	client.send( { op:"register", sid:mySID, svc:srvc } );
+	socket.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
 	return p.p;

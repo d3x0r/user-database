@@ -202,6 +202,7 @@ export class UserServer extends Protocol {
 
 
 	connect(ws) {
+		const MyWS = ws; // we do get a MyWS in connect.
 		//const ws = MyWS.ws;
 		//console.log( "Connect:", ws );
 		const protocol = ws.ws.headers["Sec-WebSocket-Protocol"];
@@ -361,8 +362,9 @@ export class UserServer extends Protocol {
 		}
 
 		function handleClient( ws, msg_ ) {
+			ws = MyWS;
 			const msg = JSOX.parse( msg_ );
-			console.log( 'UserDbServer message:', msg, ws.state );
+			console.trace( 'UserDbServer message:', msg, ws.state );
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
@@ -387,7 +389,10 @@ export class UserServer extends Protocol {
 				} else if( msg.op === "pickSash" ){
 					pickedSash( ws, msg );
 				} else {
-					console.log( "Unhandled message:", msg );
+					// this is handled other places...
+					if( msg.op === 'get' ) ;
+					else
+						console.log( "Unhandled message:", msg );
 				}
 			} catch(err) {
 				console.log( "Something bad happened processing a message:", err );
@@ -570,8 +575,8 @@ export class UserServer extends Protocol {
 		//console.log( "user created:", user );
 		ws.state.user= user;
 		ws.state.user.authorize = true;
-		// ask the client for a device id
-		ws.send( JSON.stringify( {op:"create", success:false, device:true } ) );
+		// Looks like this should have passed all setup conditions and got created?
+		ws.send( JSON.stringify( {op:"create", success:true } ) );
 	}
 
 	async function addDevice(ws,msg) {

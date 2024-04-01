@@ -6,9 +6,10 @@ const SaltyRNGModule = await Import("/node_modules/@d3x0r/srg2/salty_random_gene
 const SaltyRNG = SaltyRNGModule.SaltyRNG;
 //ws.SaltyRNG = SaltyRNG;
 
-if(false) {
-	const clientKey = localStorage.getItem("clientId");
+if(true) {
+	const clientKey = localStorage.getItem("sack/udb/clientId");
 	if (!clientKey) {
+		// this is ignored if server doesn't track unique devices
 		ws.send(`{op:newClient}`);
 	}
 }
@@ -21,8 +22,8 @@ ws.doLogin = function (user, pass) {
 	//ws.send(
 	pass = SaltyRNG.id(pass);
 	ws.send(`{op:"login",account:${JSON.stringify(user)},password:${JSON.stringify(pass)}
-        		,clientId:${JSON.stringify(localStorage.getItem("clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("deviceId"))} }`);
+        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
+                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 
 }
 ws.doCreate = function (display, user, pass, email) {
@@ -30,14 +31,14 @@ ws.doCreate = function (display, user, pass, email) {
 	pass = SaltyRNG.id(pass);
 	ws.send(`{op:"create",account:${JSON.stringify(user)},password:${JSON.stringify(pass)}
             		,user:${JSON.stringify(display)},email:${JSON.stringify(email)}
-        		,clientId:${JSON.stringify(localStorage.getItem("clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("deviceId"))} }`);
+        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
+                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 }
 ws.doGuest = function (user) {
 	//ws.send(
 	ws.send(`{op:"guest",user:${JSON.stringify(user)}
-        		,clientId:${JSON.stringify(localStorage.getItem("clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("deviceId"))} }`);
+        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
+                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 }
 
 ws.getService = function (domain, service) {
@@ -50,8 +51,8 @@ const sesKey = localStorage.getItem("seskey");
 if (sesKey) {
 	// auto reconnect
 	ws.send(`{op:"Login",seskey:${JSON.stringify(sesKey)}
-        		,clientId:${JSON.stringify(localStorage.getItem("clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("deviceId"))} }`);
+        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
+                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 
 }
 
@@ -79,7 +80,7 @@ ws.processMessage = function (ws, msg) {
 			;//Alert(" Login Success" );
 		else if (msg.ban) {
 			Alert("Bannable Offense");
-			localStorage.removeItem("clientId"); // reset this
+			localStorage.removeItem("sack/udb/clientId"); // reset this
 			ws.close(1000, "Client respecting ban, and resetting");
 		} else if (msg.device) {
 			//temporary failure, this device was unidentified, or someone elses
@@ -93,15 +94,15 @@ ws.processMessage = function (ws, msg) {
 		if (msg.success) {
 			//Alert(" Login Success" );
 
-			localStorage.setItem("deviceId", msg.deviceId);
+			localStorage.setItem("sack/udb/deviceId", msg.deviceId);
 		} else if (msg.ban) {
 			Alert("Bannable Offense");
-			localStorage.removeItem("clientId"); // reset this
+			localStorage.removeItem("sack/udb/clientId"); // reset this
 			ws.close(1000, "Create count respecting ban, resetting");
 		} else if (msg.device) {
 			//temporary failure, this device was unidentified, or someone elses
 			const newId = SaltyRNG.Id();
-			localStorage.setItem("deviceId", newId);
+			localStorage.setItem("sack/udb/deviceId", newId);
 			ws.send(JSON.stringify({ op: "device", deviceId: newId }));
 			return true;
 		} else
@@ -109,7 +110,7 @@ ws.processMessage = function (ws, msg) {
 
 	} else if (msg.op === "set") {
 		console.log( "directly set:", msg.value, msg.key );
-		localStorage.setItem(msg.value, msg.key);
+		localStorage.setItem( "sack/udb/"+ msg.value, msg.key);
 		return true; // client doesn't care.
 	} else if (msg.op === "guest") {
 		if (msg.success) {

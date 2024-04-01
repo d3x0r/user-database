@@ -1,5 +1,7 @@
 
 import {sack} from "sack.vfs";
+const JSOX = sack.JSOX;
+import {Events} from "sack.vfs/Events"
 
 const AsyncFunction = Object.getPrototypeOf( async function() {} ).constructor;
 
@@ -12,23 +14,39 @@ const l = {
 	events : {},
 };
 
+class Socket extends Events {
+	ws = null;
+	opts = null;
+	constructor( url, proto, opts ){
+		super();
+		this.opts = opts;
+		this.ws = sack.WebSocket.Client( url, proto, { perMessageDeflate: false } );
+		this.ws.onopen = ()=>this.on("open", this.ws )
+		this.ws.onmessage = (msg)=>this.on("message", msg )
+		this.ws.onclose = (code,reason)=>this.on("close", [code,reason])
+	}
+	set onmessage(val) { this.on("message", val ); }
+	send( m ) {
+		if( "string" ===  typeof m ) this.ws.send( m );
+		else this.ws.send( JSOX.stringify( m ) );
+	}
+}
 
 function open( opts ) {
 	const protocol = opts?.protocol || "protocol";
 	const server = opts.server;
 	//console.log( "connect with is:", server, protocol );
-	var client = sack.WebSocket.Client( server, protocol, { perMessageDeflate: false } );
+	var client = new Socket( server, protocol, { perMessageDeflate: false } );
     client.opts = opts;
-	client.on("open", function ()  {
-		const ws = this;
+	client.on("open", function (ws)  {
 		console.log( "Connected (service identification in process; consult config .jsox files)", opts.configPath || "<current PWD>" );
 		//console.log( "ws: ", this ); //  ws is also this
-		this.onmessage = ( msg_ )=> {
+		ws.onmessage = ( msg_ )=> {
 			const msg = sack.JSOX.parse( msg_ );
 			if( msg.op === "addMethod" ) {
 				try {
-					var f = new AsyncFunction( "Import", "on", "PORT", "opts", msg.code );
-					const p = f.call( ws, (m)=>import(m), UserDbRemote.on, opts.port, opts );
+					var f = new AsyncFunction( "Import", "on", "PORT", "opts", "socket", msg.code );
+					const p = f.call( ws, (m)=>import(m), UserDbRemote.on, opts.port, opts, client );
 					p.then( ()=>{						
 						if( opts.connect ) opts.connect( ws );
 					} );
@@ -37,20 +55,12 @@ function open( opts ) {
 				}
 			}
 			else {
-				if( this.processMessage && !this.processMessage( msg )  ){
+				if( ws.processMessage && !ws.processMessage( msg )  ){
 					if( opts.processMessage && !opts.processMessage( ws, msg, msg_ ) )
 						console.log( "unknown message Received:", msg );
 				}
 			}
        	};
-		this.on( "close", function( msg ) {
-        		console.log( "opened connection closed" );
-        	        //setTimeout( ()=> {console.log( "waited" )}, 3000 )
-	        } );
-		//client.send( "Connected!" );
-		//client.send( msg );
-	       	//client.send( msgtext );
-                //client.send( "." );
 	} );
 
 	client.on( "close", function( code, reason ) {

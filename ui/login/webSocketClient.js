@@ -237,6 +237,12 @@ function processMessage(ws,msg_) {
 			const p = f.call(ws, JSOX, (i) => import(i), l, Alert);
 			l.connected = true;
 			l.ws = ws;
+			l.ws.on("close", (code,reason)=>{
+				console.log( "Connection ended... ", code, reason ); 
+				console.log( "Suppose we still need to connect?" );
+				l.on( "close", [code,reason] );
+
+			})
 			if (l.loginForm) l.loginForm.connect();
 		} catch (err) {
 			console.log("Function compilation error:", err, "\n", msg.code);
