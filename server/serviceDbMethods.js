@@ -3,7 +3,7 @@
 // (Import,on,PORT)
 const _debug_location = false;
 
-const ws = this;
+//const ws = this;
 //console.log( "Extend this websocket:", this );
 console.log( "Service extension:", process.cwd() );
 const serviceConfig = (await Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox")).default;
@@ -72,10 +72,8 @@ function registered( socket,msg ) {
 
 const events = {};
 
-//ws.on = on
-
 socket.processMessage = function( msg ) {
-	//console.trace( "handle message:", ws, msg );
+	//console.trace( "handle message:", client, msg );
 	if( msg.op === "register" ) {
 		registered( socket, msg );
 		return true;
@@ -96,10 +94,13 @@ if( srvc instanceof Array ) {
 	// this might be an option; but then there would have to be multiple badge files; or badges with orgs
 	//org.forEach( registerOrg );
 } else 
-	registerService( srvc, srvc.badges );
+	this.service = registerService( srvc, srvc.badges ).then( (s)=>{
+		console.log( "Service register resolved:", s );
+		return s;
+	} );
 
 function registerService( srvc ) {
-	console.log( "Registering serivce:", serviceConfig, serviceConfig.publicAddresses );
+	console.log( "Registering serivce:", mySID, srvc );
 	socket.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
