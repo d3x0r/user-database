@@ -73,7 +73,7 @@ function registered( socket,msg ) {
 const events = {};
 
 socket.processMessage = function( msg ) {
-	//console.trace( "handle message:", client, msg );
+	console.trace( "ServiceDbMethods handle message:", msg );
 	if( msg.op === "register" ) {
 		registered( socket, msg );
 		return true;
@@ -81,6 +81,7 @@ socket.processMessage = function( msg ) {
 		// this looks like just a reply.
 		// the message calls on("expect", msg ) in order
 		// to get a unique key to send to the connecting client.
+		console.log( "Sending ON request to get result" );
 	    socket.send( {op:'expect', id:msg.id
 					, addr:{ addr:srvc.addr, port:srvc.port }
 					, key:on( "expect", msg ) } );
@@ -93,14 +94,14 @@ socket.processMessage = function( msg ) {
 if( srvc instanceof Array ) {
 	// this might be an option; but then there would have to be multiple badge files; or badges with orgs
 	//org.forEach( registerOrg );
-} else 
+} else if( srvc ) 
 	this.service = registerService( srvc, srvc.badges ).then( (s)=>{
 		console.log( "Service register resolved:", s );
 		return s;
 	} );
 
 function registerService( srvc ) {
-	console.log( "Registering serivce:", mySID, srvc );
+	console.log( "Registering service:", mySID, srvc );
 	socket.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});

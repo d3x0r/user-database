@@ -153,10 +153,12 @@ function openLoginServer( opts, cb )
 	const server = new UserServer( opts );
 	console.log( "login serving on " + opts.port );
 	// this connects my own service to me...
+	// do I need this?
+	//   Fails without a service configuration anyway...
 	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+opts.port
 			, configPath:process.cwd() + "/"
 			, connect() {
-				console.log( 'service completed registration?')
+				console.log( 'Login self-service completed registration?')
 				coreService.on( "expect", expectUser );
 			}
 		 } );
@@ -214,7 +216,7 @@ export class UserServer extends Protocol {
 			
 			ws.on("message", handleService );
 			ws.on("close", closeService );
-			//console.log( "sending service fragment" );
+			console.log( "sending service fragment" );
 			ws.send( serviceMethodMsg );
 		} else if( protocol === "admin" ){
 			ws.on("message", handleAdmin);
@@ -364,7 +366,7 @@ export class UserServer extends Protocol {
 		function handleClient( ws, msg_ ) {
 			ws = MyWS;
 			const msg = JSOX.parse( msg_ );
-			console.trace( 'UserDbServer message:', msg, ws.state );
+			console.trace( 'UserDbServer message:', msg );
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
@@ -491,7 +493,9 @@ export class UserServer extends Protocol {
 			//console.log( "login:", msg );
 			//console.log( "client:", isClient );
 		}
+		console.log( 'waiting for a user forever?')
 		const user = await UserDb.getUser( msg.account );
+		console.log( "user:", user );
 		
 		/*
 		if( user && user.unique !== isClient ) {
@@ -509,6 +513,7 @@ export class UserServer extends Protocol {
 
 		//console.log( "user:", user, msg.password );
 		if( !user || user.pass !== msg.password ) {
+			console.log( "No User or Bad password");
 			ws.send( JSON.stringify( { op:"login", success: false } ) );
 			return;
 		}
@@ -521,15 +526,18 @@ export class UserServer extends Protocol {
 			if( !dev ) {
 				ws.state.login = msg;
 				// ask the device to add a device.
+				console.log( "Bad device");
 				ws.send( JSON.stringify( {op:"login", success:false, device:true } ) );
 				return;
 			}
 			if( !dev.active ) {
+				console.log( "inacive state");
 				ws.send( JSON.stringify( {op:"login", success:false, inactive:true } ) );
 				return;
 			}
 		}
 		//console.log( "sending false" );
+		console.log( "Otherwise I guess it's true?" );
 		ws.send( JSON.stringify( { op:"login", success: true } ));
 	}
 
@@ -542,12 +550,14 @@ export class UserServer extends Protocol {
 
 	async function doCreate( ws, msg ) {
 		if( !validateUsername( msg.user ) ) {
+			console.log( "bad create username");
 			ws.send( JSON.stringify( { op:"create", success: false, name:true } ) );
 			return;
 		}
 
 		const validEMail = await checkEmail( msg.email );
-		if( !validEMail ) {
+		if( false && !validEMail ) {
+			console.log( "bad create email");
 			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
 			return;
 		}
@@ -562,11 +572,14 @@ export class UserServer extends Protocol {
 
 		const oldUser = await UserDb.User.get( msg.account );
 		if( oldUser ) {
+			console.log( "user Account exists");
 			ws.send( JSON.stringify( { op:"create", success: false, account:true } ) );
 			return;
 		}
-		const oldUser2 = await UserDb.User.getEmail( msg.email );
+
+		const oldUser2 = msg.email && (await UserDb.User.getEmail( msg.email ));
 		if( oldUser2 ) {                 
+			console.log( "create user email exists");
 			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
 			return;
 		}
@@ -576,6 +589,7 @@ export class UserServer extends Protocol {
 		ws.state.user= user;
 		ws.state.user.authorize = true;
 		// Looks like this should have passed all setup conditions and got created?
+		console.log( "Success creating user." );
 		ws.send( JSON.stringify( {op:"create", success:true } ) );
 	}
 
@@ -625,6 +639,7 @@ export class UserServer extends Protocol {
 	async function handleServiceMsg( ws, msg ){
 		// msg.org is 'org.jsox' from the client
 		// sid is the last SID we assigned.
+		console.log( "Service message:", msg );
 		if( msg.sid ) {
 			console.log( "service is asking to reconnect...", msg.sid );
 			// this will wait until a client asks for this service; even on reconnect
@@ -670,7 +685,7 @@ export class UserServer extends Protocol {
 	async function getUserService( ws, msg ) {
 		// domain, service
 		//console.log( "Calling requestservice", ws.state );
-		console.log( "So this request should have a user..." );
+		//console.log( "So this request should have a user..." );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
 		if( inst ) {
 			//console.log( "Service result:", inst, "for", msg );

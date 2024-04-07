@@ -277,29 +277,31 @@ export class Organization  extends StoredObject{
 		}
 	}
 
-}
-
-Organization.get = async function ( name, forClient ) {
-	const org = l.orgs.get( name );
-	if( !org && forClient ){
-		const org = await Organization.new( name, forClient );
+	static async get( name, forClient ) {
+		const org = await l.orgs.get( name );
+		if( !org && forClient ){
+			const org = await Organization.new( name, forClient );
+			return org;
+		}
 		return org;
 	}
-	return org;
+	
+	
+	
+	static async new( name, forUser ) {
+		if( !(forUser instanceof User ) ) 
+			throw new Error( "Required object User incorrect." + JSOX.stringify(forUser ) );
+		console.log( "Creating Org" );
+		const org = new Organization();
+		org.name = name;
+		org.createdBy = forUser;
+		org.orgId = sack.Id();
+	
+		return org.store().then( (id)=>org );
+	}
+	
 }
 
-
-
-Organization.new = async function ( name, forUser ) {
-	if( !(forUser instanceof User ) ) throw new Error( "Required object User incorrect." + JSOX.strinigfy(forUser ) );
-	console.log( "Creating Org" );
-	const org = new Organization();
-	org.name = name;
-	org.createdBy = forUser;
-	org.orgId = sack.Id();
-
-	return org.store().then( (id)=>org );
-}
 
 
 // - - -  - - - - - - - -  -- - - - - - - ---  -- - - - - - - - - - -  -- - - - - -- -
@@ -321,6 +323,47 @@ function domainFromJSOX(field,val) {
 	return (this.domain[field] = val),undefined;
 }
 
+async function createInitialDomain(domain,service, user) {
+	console.trace( "Registrations?", l.registrations, domain, service, user );
+	for( let r = 0; r < l.registrations.length; r++ ) {
+		const regPending = l.registrations[r];
+		const reg = regPending.msg;
+		if( reg.domain === domain ) {
+			if( reg.service === service ) {
+				const org = (await Organization.get( reg.org, user )) || (await Organization.new( reg.org, user ));
+				console.log( "Got org...")
+				const dom = await org.getDomain( domain, user );
+				console.log( "got domain...", dom );
+				const newSrvc = new Service().set( dom, service, user );
+				UserDb.on( "newService", newSrvc );
+				//console.log( "----------------------------------------- SERVICE STORE HERE -------------------------------------" );
+				newSrvc.store();
+				dom.services.push( newSrvc );
+				dom.store();			
+				
+				const badges = newSrvc.makeBadges( reg.badges, user );
+				
+				const inst = newSrvc.addInstance( regPending.ws );
+
+				// resolve the registration
+				regPending.p.then( (a)=>{
+					console.log( "Service has been notified of it's SID, this can now tell it to expec this user?")
+					return a;
+				})
+				regPending.res( newSrvc );
+				console.log( "This service has gotten a reply for their identity and is no longer 'registrations'");
+				l.registrations.splice( r, 1 );
+
+				//console.log( 'authorize...', svc, stringifier.stringify( org ) );
+				// radio the service ahead of time, allowing the service to setup for the user
+				// gets back a connection token and address...
+				//const redirect = svc.authorize( forUser );
+				return newSrvc;
+			}
+		}
+	}
+
+}
 
 export class Domain  extends StoredObject{
 	domainId = null;
@@ -375,7 +418,7 @@ export class Domain  extends StoredObject{
 		let promises = [];
 		let resolved = false;
 		
-		const srvc = await new Promise( (res,rej)=>{
+		const srvc = await new Promise( async (res,rej)=>{
 			//console.log( "---------------------------- GETTING SERVICE FROM DOMAIN:", name, forUser, this );
 			const srvc = this.services.find( (srvc,idx)=>{
 				if( srvc instanceof Promise ) {
@@ -391,7 +434,7 @@ export class Domain  extends StoredObject{
 				}
 				return( srvc.name===name );
 			} );
-			//console.log( "domain.getservice result blah (reload not null, create is null?)", srvc );
+			console.log( "domain.getservice result blah (reload not null, create is null?)", srvc );
 			if( !srvc ) {
 				if( !promises.length) {
 					// don't allow guests to create services.
@@ -400,40 +443,7 @@ export class Domain  extends StoredObject{
 						res( null );
 						return;
 					}
-
-					console.log( "Registrations?", l.registrations );
-					for( let r = 0; r < l.registrations.length; r++ ) {
-						const regPending = l.registrations[r];
-						const reg = regPending.msg;
-						if( reg.domain === this.name ) {
-							if( reg.service === name ) {
-								const newSrvc = new Service().set( this, name, forUser );
-								UserDb.on( "newService", newSrvc );
-								//console.log( "----------------------------------------- SERVICE STORE HERE -------------------------------------" );
-								newSrvc.store();
-								this.services.push( newSrvc );
-								this.store();			
-								
-								const badges = newSrvc.makeBadges( reg.badges, forUser );
-								if(0) {
-									const inst = newSrvc.addInstance( regPending.ws );
-								}
-								// resolve the registration
-								regPending.then( (a)=>{
-									console.log( "Service has been notified of it's SID, this can now tell it to expec this user?")
-									return a;
-								})
-								regPending.res( newSrvc );
-								l.registrations.splice( r, 1 );
-		
-								//console.log( 'authorize...', svc, stringifier.stringify( org ) );
-								// radio the service ahead of time, allowing the service to setup for the user
-								// gets back a connection token and address...
-								//const redirect = svc.authorize( forUser );
-								return newSrvc;
-							}
-						}
-					}
+					await createInitialDomain( this.name, name, forUser );
 					// not pending, not known, now what?
 					res( null );
 				}
@@ -502,6 +512,7 @@ class ServiceInstance {
 			this.#service = s;
 	}
 	async authorize( rid, forUser ) {
+		console.log( "Authorize service....", !!this.#ws);
 		const inst = this;
 		//console.log( "inst:", inst, forUser );
 		//console.log( "have to send something to a instance ...., to get it to accept, and get user info" );
@@ -527,9 +538,15 @@ class ServiceInstance {
 		return this;
 	}
 	send(msg) {
+		if( !this.#ws ) {
+			console.trace( "This instance is closed, why using this one?", msg )
+			return;
+		}
 		if( "string" !== typeof msg ) msg = JSOX.stringify( msg );
-		console.log( "asdf", msg );
-		this.#ws.send(msg);
+		console.trace( "asdf", msg );
+		if( this.#ws.readyState === 1 )
+			this.#ws.send(msg);
+		else console.trace( " tried to send to a closed socket..." );
 	}
 	connect( ws ) {
 		// being allocated/connected in a service so it's not set yet
@@ -538,12 +555,16 @@ class ServiceInstance {
 		//if( this.sid && sid !== this.sid ) console.log( "DIfferent SID", sid, this.sid );
 		//this.sid = sid;
 		//console.trace( "Setting websocket:", ws );
-		if( this.#ws ) {
+		if( this.#ws && this.#ws !== ws ) {
 			console.log( "This should probably be a fatal error, but it can be that a service restarts and doesn't notify the host properly..." );
 			this.#ws.close( 1000, "Connection replaced with yourself" );
 		}
-
+		//console.log( "This service instance is now connected this this socket:", ws );
 		this.#ws = ws;
+		this.#ws.on( "close", (a,b)=>{
+			console.log( "Hope this doesn't steam the close event...");
+			this.#ws = null; // this isntance is no longer presnet
+		})
 		//console.trace( "---- Finally finish the connection for ws->inst tracking");
 		ws.send( JSOX.stringify( { op:"register", ok:true, sid: this.sid } ) );
 		return;
@@ -569,6 +590,7 @@ export class Service  extends StoredObject{
 	masterSash = null;
 	defaultSash = null;//new Sash();
 	instances = []; // allocated service identifiers
+	#free_instances = []; // initially, all istances...
 	#active_instances = []; // allocated service identifiers
 	#domain = null;
 	#instances = []; // actively tracked services... 
@@ -594,6 +616,8 @@ export class Service  extends StoredObject{
 	loaded( a, b ) {
 	
 		super.loaded(a,b);
+		this.#free_instances = this.instances.slice();
+
 		console.log( "reloaded? fix sashes?", this )
 	}
 	async store() {
@@ -650,7 +674,7 @@ export class Service  extends StoredObject{
 			console.log( "Probably returned nothing?", inst );
 			return inst;
 		} else {
-			//console.log( "this has instances?", this.instances, this.#instances );
+			console.trace( "this has instances?", this.instances, this.#instances );
 			for( let i = 0; i < this.instances.length; i++ ) {
 			//for( let inst of this.instances ) {
 				const inst = this.instances[i];
@@ -683,8 +707,14 @@ export class Service  extends StoredObject{
 		console.trace( "ADDING A INSTANCE for socket:", ws );
 		const inst = new ServiceInstance( );
 		inst.service = this;
-		inst.set().connect( ws );
-		this.instances.push( inst.sid );
+		if( this.#free_instances.length ) {
+			const newinst = this.#free_instances.pop();
+			inst.set( newinst );
+		}else {
+			inst.set();
+			this.instances.push( inst.sid );
+		}
+		inst.connect( ws );
 		this.#active_instances.push(inst );
 		this.#instances.push( inst );
 		this.store();
@@ -692,6 +722,8 @@ export class Service  extends StoredObject{
 	}
 
 	addInstance_( inst ) {
+		this.instances.push( inst.sid );
+		this.#free_instances.push( inst.sid );
 		this.#instances.push( inst );
 	}
 	setInstance( oldsid, sid )
@@ -781,7 +813,8 @@ export class User  extends StoredObject{
 			await l.account.set( this.account, this );
 			await l.name.set( this.name, this );
 			//console.log( "Account was set" );
-			await l.email.set( this.email, this );
+			if( this.email )
+				await l.email.set( this.email, this );
 			//console.log( "email was indexed" );
 			return this;
 		} );
@@ -867,29 +900,31 @@ export class User  extends StoredObject{
 		} 
 		return badges;
 	}
-}
 
-User.get = async function( account ) {
-	// account should be a string, but get/set on bloomnhas will handle strings
-	const t = typeof account; if( t !== "number" && t!=="string" ) throw new Error( "Unsupported key type passed:" +  t + ":"+account );
-	//console.log( "lookingup", typeof account, account );
-	if( !account ) {
-		return Promise.resolve(null);//throw new Error( "Account must be specified");
+	static async get( account ) {
+		// account should be a string, but get/set on bloomnhas will handle strings
+		const t = typeof account; if( t !== "number" && t!=="string" ) throw new Error( "Unsupported key type passed:" +  t + ":"+account );
+		//console.log( "lookingup", typeof account, account );
+		if( !account ) {
+			return Promise.resolve(null);//throw new Error( "Account must be specified");
+		}
+		//console.log( "l?", JSOX.stringify(l.account,null,"\t"), account );
+		const user1 = await l.account.get( account );
+		if( !user1 )  {
+			return l.name.get( account );
+		}
+		return user1;
+	
 	}
-	//console.log( "l?", JSOX.stringify(l.account,null,"\t"), account );
-	const user1 = await l.account.get( account );
-	if( !user1 )  {
-		return l.name.get( account );
+	
+	static getEmail( email ) {
+		if( email && email === "" ) return null; // all NULL email addresses are allowed.
+		//console.log( "l?", l.email, email );
+		return l.email.get( email );
 	}
-	return user1;
-
+	
 }
 
-User.getEmail = function( email ) {
-	if( email && email === "" ) return null; // all NULL email addresses are allowed.
-	//console.log( "l?", l.email, email );
-	return l.email.get( email );
-}
 
 
 // - - -  - - - - - - - -  -- - - - - - - ---  -- - - - - - - - - - -  -- - - - - -- -
@@ -962,7 +997,7 @@ const UserDb = {
 	async hook( storage ) {
 		l.storage = storage;
 		BloomNHash.hook( storage );
-		
+		console.trace( "------------- HOOK USER DATABASE --------------- ");
 		//jsox.fromJSOX( "~T", TextureMsg, buildTexturefromJSOX );
 		encoders.forEach( e=>stringifier.toJSOX( e.tag, e.p, e.f ) );
 
@@ -1010,6 +1045,7 @@ const UserDb = {
 			l.email     = await storage.get( l.ids.emailId );
 			l.email.caseInsensitive = true;
 			l.account   = await storage.get( l.ids.accountId );
+			console.log( "reloading account map?", l.account, l.ids );
 			l.account.caseInsensitive = true;
 			if( l.ids.nameId) 
 				l.name      = await storage.get( l.ids.nameId );
@@ -1132,9 +1168,9 @@ const UserDb = {
 	socketHandleRequest,
 	// register a service... this essentially blocs 
 	async getService( ws, service ) {
-		console.log( 'this is called when a service registers...')
+		console.trace( 'this is called when a service registers...', service.description, service )
 		function defer() {
-			//console.log( "Service:", service, " has to wait for registration...");
+			console.log( "Service:", service, " has to wait for registration...");
 			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;
@@ -1144,7 +1180,7 @@ const UserDb = {
 			return reg.p;
 		}
 		//if( !ws.state.user ) return defer();
-		//console.trace( "GET service:", ws, service );
+		console.trace( "GET (registration?) service:", ws, service );
 		const org = await Organization.get( service.org );
 		if( !org ) return defer();
 		const dmn = await org.getDomain( service.domain );
@@ -1159,7 +1195,12 @@ const UserDb = {
 	},
 	async requestService( domain, service, forUser ) {
 
-		const oldDomain = await l.domains.get( domain );
+		let oldDomain = await l.domains.get( domain );
+		//console.log( "Domain:", domain, oldDomain, forUser );
+		if( !oldDomain ) 
+			await createInitialDomain( domain, service, forUser );
+		oldDomain = await l.domains.get( domain );
+		//console.log( "Have a domain now, doncha?", domain, service, oldDomain );
 		const oldService = await oldDomain?.getService( service, forUser );
 
 		if( !oldDomain || !oldService ) {
@@ -1169,10 +1210,11 @@ const UserDb = {
 			
 			console.trace( "Failed to find service...", domain, service );
 			return undefined;
-		} else {
+		} /*else {
 			// it might still be pending registration....
-			console.log( 'already exists, but registrations:', l.registrations );
-		}
+			
+			console.log( 'already exists, but registrations:', l.registrations, dom.services );
+		}*/
 		//return oldService;
 		const inst = oldService.getConnectedInstance();
 		console.log( "forUser", forUser );
