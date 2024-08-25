@@ -101,7 +101,7 @@ if( srvc instanceof Array ) {
 	} );
 
 function registerService( srvc ) {
-	console.log( "Registering service:", mySID, srvc );
+	console.log( "Registering service(sid,name,desc):", mySID, srvc.name, srvc.description );
 	socket.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});

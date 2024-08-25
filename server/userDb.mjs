@@ -324,7 +324,7 @@ function domainFromJSOX(field,val) {
 }
 
 async function createInitialDomain(domain,service, user) {
-	console.trace( "Registrations?", l.registrations, domain, service, user );
+	//console.trace( "Registrations?", l.registrations, domain, service, user );
 	for( let r = 0; r < l.registrations.length; r++ ) {
 		const regPending = l.registrations[r];
 		const reg = regPending.msg;
@@ -434,16 +434,17 @@ export class Domain  extends StoredObject{
 				}
 				return( srvc.name===name );
 			} );
-			console.log( "domain.getservice result blah (reload not null, create is null?)", srvc );
+			console.log( "domain.getservice result(reload not null, wait to create is undefined or null?)", srvc );
 			if( !srvc ) {
 				if( !promises.length) {
 					// don't allow guests to create services.
 					//console.log( "Create new service is by guest?", forUser );
-					if( (!config.allowGuestServices) && forUser.guest ) {
+					if( forUser && (!config.allowGuestServices) && forUser.guest ) {
 						res( null );
 						return;
 					}
-					await createInitialDomain( this.name, name, forUser );
+					if( forUser )
+						await createInitialDomain( this.name, name, forUser );
 					// not pending, not known, now what?
 					res( null );
 				}
@@ -468,30 +469,12 @@ class StoredService{
 	domain = null;
 }
 
-function serviceFromJSOX(field,val) {
-	//console.log( "Setting Servce Field:", field, val );
-		try {
-	if( !field ) {
-		if(0) // thisshould only happen when a instance connects; otherwise no tracking info needed.
-		for( let sid of this.srvc.instances ) {
-			// rebuild service instances.
-			const inst = new ServiceInstance();
-			inst.sid = sid;
-			inst.service = this;
-			this.srvc.addInstance_( inst );
-		}
-		return this.srvc;
-	}
-	// possible redirection of arrays and members...
-	if( field === "domain" ) this.srvc.set( val );
-	else if( field === "instances" ) {
-		return this.srvc[field]=val;
-	}
-	else this.srvc[field] = val;
-	return undefined;
-} catch(err) { console.log( "SERVICE FAULT:", err ) }
-}
 
+
+/**
+ * This is a connected instance of a service.  It is initialized blank, and is set
+ * by external information.
+ */
 class ServiceInstance {
 	sid = null;
 	#service = null;
@@ -512,24 +495,25 @@ class ServiceInstance {
 			this.#service = s;
 	}
 	async authorize( rid, forUser ) {
-		console.log( "Authorize service....", !!this.#ws);
+		console.trace( "Authorize service....", !!this.#ws);
 		const inst = this;
 		//console.log( "inst:", inst, forUser );
 		//console.log( "have to send something to a instance ...., to get it to accept, and get user info" );
-		const permissions = await forUser.getSash( this.#service.domain );
 		//console.log( "permissions:", permissions );
 
-		const id = sack.Id();
-		
-		const msg = { op:"expect", id:id, name:forUser.name, sash:permissions, UID: sack.id(forUser.userId+"@"+this.#service.domain) };
-		inst.send( msg );
-		
-		return new Promise( (res,rej)=>{
-			l.authorizing.set( id, {res:res,rej:rej, rid:rid } );
-		} );
-
+		if( forUser ) {
+			const permissions = await forUser.getSash( this.#service.domain );
+			const id = sack.Id();
+			const msg = { op:"expect", id:id, name:forUser.name, sash:permissions, UID: sack.id(forUser.userId+"@"+this.#service.domain) };
+			inst.send( msg );
+			
+			return new Promise( (res,rej)=>{
+				l.authorizing.set( id, {res:res,rej:rej, rid:rid } );
+			} );
+		}
 	}
 	set( sid ){
+		console.trace( "Set Service Instance SID:", sid);
 		const oldSid = this.sid;
 		this.sid = sid || sack.Id();
 		//console.log( "Setting ID:", oldSid, this.sid );
@@ -566,9 +550,13 @@ class ServiceInstance {
 			this.#ws = null; // this isntance is no longer presnet
 		})
 		//console.trace( "---- Finally finish the connection for ws->inst tracking");
-		ws.send( JSOX.stringify( { op:"register", ok:true, sid: this.sid } ) );
+		if( ws.readyState == 1 )
+			ws.send( JSOX.stringify( { op:"register", ok:true, sid: this.sid } ) );
+		else
+			console.trace( "This is a closed socket, why is it being connected?" );
 		return;
 	}
+
 }
 
 function serviceToJSOX(stringifier) {
@@ -612,13 +600,6 @@ export class Service  extends StoredObject{
 			this.defaultSash.store();
 		}
 		return this;
-	}
-	loaded( a, b ) {
-	
-		super.loaded(a,b);
-		this.#free_instances = this.instances.slice();
-
-		console.log( "reloaded? fix sashes?", this )
 	}
 	async store() {
 		return await super.store();
@@ -704,6 +685,7 @@ export class Service  extends StoredObject{
 
 	addInstance(ws) {
 		if( !ws ) throw new Error( "Instances need a socket." );
+
 		console.trace( "ADDING A INSTANCE for socket:", ws );
 		const inst = new ServiceInstance( );
 		inst.service = this;
@@ -769,9 +751,33 @@ export class Service  extends StoredObject{
 			userSash.store();
 		}
 	}
+	static serviceFromJSOX(field,val) {
+		//console.log( "Setting Service Field:", this, field, val );
+		try {
+			if( !field ) {
+				// finalize object initialization.
+				this.srvc.#free_instances = this.instances.slice();
+				//console.log( "reloaded? fix sashes?", this )
+				if(0) // thisshould only happen when a instance connects; otherwise no tracking info needed.
+				for( let sid of this.srvc.instances ) {
+					// rebuild service instances.
+					const inst = new ServiceInstance();
+					inst.sid = sid;
+					inst.service = this;
+					this.srvc.addInstance_( inst );
+				}
+				return this.srvc;
+			}
+			// possible redirection of arrays and members...
+			if( field === "domain" ) this.srvc.set( val );
+			else if( field === "instances" ) {
+				return this.srvc[field]=val;
+			}
+			else this.srvc[field] = val;
+			return undefined;
+		} catch(err) { console.log( "SERVICE FAULT:", err ) }
+	}
 }
-
-
 
 
 export class User  extends StoredObject{
@@ -1007,7 +1013,7 @@ const UserDb = {
 			, { tag:  "~I", p:UniqueIdentifier, f: null } 
 			, { tag:  "~O", p:StoredOrganization, f: orgFromJSOX }
 			, { tag: "~Dm", p:StoredDomain, f: domainFromJSOX }
-			, { tag:"~Svc", p:StoredService, f: serviceFromJSOX }
+			, { tag:"~Svc", p:StoredService, f: Service.serviceFromJSOX }
 			, { tag:"~SvI", p:ServiceInstance, f:null }
 			, { tag:"~Ssh", p:StoredSash, f:sashFromJSOX  }
 			, { tag:  "~B", p:Badge, f:null  }
@@ -1168,9 +1174,9 @@ const UserDb = {
 	socketHandleRequest,
 	// register a service... this essentially blocs 
 	async getService( ws, service ) {
-		console.trace( 'this is called when a service registers...', service.description, service )
-		function defer() {
-			console.log( "Service:", service, " has to wait for registration...");
+		console.log( 'this is called when a service registers...', service.description )
+		function defer(why) {
+			console.log( "Service:", service.description, " has to wait for registration...", why);
 			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;
@@ -1180,15 +1186,15 @@ const UserDb = {
 			return reg.p;
 		}
 		//if( !ws.state.user ) return defer();
-		console.trace( "GET (registration?) service:", ws, service );
+		console.log( "GET (registration?) service:", ws.connection.remoteAddress, service.description );
 		const org = await Organization.get( service.org );
-		if( !org ) return defer();
+		if( !org ) return defer(0);
 		const dmn = await org.getDomain( service.domain );
-		if( !dmn ) return defer();
+		if( !dmn ) return defer(1);
 		
 		console.log( "yes this is the client...")
 		const oldService = await dmn.getService( service.service, null );
-		if( !oldService ) return defer();
+		if( !oldService ) return defer(2);
 		
 		console.log( "Resulting with service( unless defeerred)" );
 		return oldService;

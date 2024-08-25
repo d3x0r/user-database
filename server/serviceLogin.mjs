@@ -35,9 +35,9 @@ class Socket extends Events {
 function open( opts ) {
 	const protocol = opts?.protocol || "protocol";
 	const server = opts.server;
-	//console.log( "connect with is:", server, protocol );
+	console.log( "connect with is:", server, protocol );
 	var client = new Socket( server, protocol, { perMessageDeflate: false } );
-    client.opts = opts;
+	client.opts = opts;
 	client.on("open", function (ws)  {
 		console.log( "Connected (service identification in process; consult config .jsox files)", opts.configPath || "<current PWD>" );
 		//console.log( "ws: ", this ); //  ws is also this
@@ -60,11 +60,11 @@ function open( opts ) {
 						console.log( "unknown message Received:", msg );
 				}
 			}
-       	};
+		};
 	} );
 
 	client.on( "close", function( code, reason ) {
-      		console.log( "unopened connection closed", code, reason );
+		console.log( "unopened connection closed", code, reason );
 	} );
 	return client;
 } 

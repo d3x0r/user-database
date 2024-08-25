@@ -29,10 +29,11 @@ ws.doLogin = function (user, pass) {
 ws.doCreate = function (display, user, pass, email) {
 	//ws.send(
 	pass = SaltyRNG.id(pass);
-	ws.send(`{op:"create",account:${JSON.stringify(user)},password:${JSON.stringify(pass)}
-            		,user:${JSON.stringify(display)},email:${JSON.stringify(email)}
-        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
+	email = SaltyRNG.id(email);
+	ws.send(JSON.stringify( {op:"create",account:user,password:pass
+            		,user:display,email:email
+        		,clientId:localStorage.getItem("sack/udb/clientId")
+                        ,deviceId:localStorage.getItem("sack/udb/deviceId") }));
 }
 ws.doGuest = function (user) {
 	//ws.send(

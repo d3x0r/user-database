@@ -47,8 +47,19 @@ if(0)
 const JSOX = sack.JSOX;
 import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
 
-const storage = new sack.ObjectStorage( "fs/data.os" );
+const storageDb = sack.DB( process.env.DSN || config.dsn || "maria-udb");
+const storage = new sack.ObjectStorage( storageDb );//( "fs/data.os" );
 UserDb.hook( storage );
+
+function read( name ) {
+        try {
+                const data = sack.Volume.readAsString( name );
+                return data;
+        } catch(err) {
+                console.log( "Failed to load cert:", name );
+                return undefined;
+        }
+}
 
 const methods = sack.Volume().read( nearPath+"/userDbMethods.js" ).toString();
 const methodMsg = JSON.stringify( {op:"addMethod", code:methods} );
@@ -59,6 +70,22 @@ const serviceMethodMsg = JSON.stringify( {op:"addMethod", code:serviceMethods} )
 const serviceLoginScript = sack.Volume().read( nearPath+"/serviceLogin.mjs" ).toString();
 
 import {UserDbRemote} from "./serviceLogin.mjs";
+
+function getCertChain( ) {
+        //SSLCertificateFile /etc/letsencrypt/live/d3x0r.org/fullchain.pem
+        //SSLCertificateKeyFile /etc/letsencrypt/live/d3x0r.org/privkey.pem
+
+        if( process.env.SSL_PATH ) return process.env.SSL_PATH + "/fullchain.pem"
+        return  parentRoot + "/certgen/cert-chain.pem"
+}
+function getCertKey( ) {
+        if( process.env.SSL_PATH ) return process.env.SSL_PATH + "/privkey.pem"
+        return  parentRoot + "/certgen/rootkeynopass.prv"
+}
+
+const certChain = read( getCertChain() );
+const certKey = read( getCertKey() );
+
 
 console.log( "getting request handler?" );
 export const loginRequest = getRequestHandler(	{ 
@@ -98,9 +125,11 @@ if( withLoader ) go.then( ()=>{
 	const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8600 ;
 	const serverOpts = { port ,
 		resourcePath: nearPath + "/../ui" ,
-		npmPath: nearPath + "/.."
+		npmPath: nearPath + "/..",
+                cert : certChain,
+                key : certKey
 		};
-	console.log( "serving from?", serverOpts );
+	//console.log( "serving from?", serverOpts );
 	if( config.certPath ) Object.assign( serverOpts, { 
 				 cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
 				, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
@@ -170,6 +199,15 @@ export class UserServer extends Protocol {
 		super( opts );
 		this.on("accept", (ws)=>this.accept(ws) );
 		this.on("connect", (ws,myWS)=>this.connect(myWS) );
+		const this_ = this;
+	this.server.server.on( "lowError",function (error, address, buffer) {
+		if( error !== 1 ) 
+			console.log( "Low Error with:", error, address, buffer  );
+		if( buffer )
+			buffer = new TextDecoder().decode( buffer );
+		this_.server.server.disableSSL(buffer); // resume with non SSL
+	} );
+
 		console.log( "File handler is a protocol level handler... should only add once?" );
 		this.addFileHandler();
 	}
@@ -233,7 +271,7 @@ export class UserServer extends Protocol {
 			return false;
 
 		ws.ws.onclose = function(code,reason) {
-				//console.log( "Remote closed" );
+			//console.log( "Remote closed" );
 			ws.on("close", [code,reason] );	
 			for( let s = 0; s < l.states.length; s++ ) {
 				const st = l.states[s];
@@ -555,7 +593,8 @@ export class UserServer extends Protocol {
 			return;
 		}
 
-		const validEMail = await checkEmail( msg.email );
+		// with hashed email, cannot validate email address.
+		const validEMail = true;//await checkEmail( msg.email );
 		if( false && !validEMail ) {
 			console.log( "bad create email");
 			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
@@ -658,7 +697,7 @@ export class UserServer extends Protocol {
 		} 
 		else 
 		{
-         //console.log( "otherwise find the service (post reg)", msg );
+			//console.log( "otherwise find the service (post reg)", msg );
 			// msg has addr:[], iaddr:[], loc:(uid), sid:false, op:register
 			//       , svc:{badges,description,domain,or,service}
 			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
