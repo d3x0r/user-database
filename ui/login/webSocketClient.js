@@ -265,7 +265,7 @@ function processMessage(ws,msg_) {
 		if (msg.success) {
 			//Alert(" Login Success" );
 			if (l.loginForm && l.loginForm.login)
-				l.loginForm.login(false);
+				l.loginForm.login(true);
 		} else
 			Alert("Login Failed...");
 

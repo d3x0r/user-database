@@ -96,12 +96,12 @@ if( srvc instanceof Array ) {
 	//org.forEach( registerOrg );
 } else if( srvc ) 
 	this.service = registerService( srvc, srvc.badges ).then( (s)=>{
-		console.log( "Service register resolved:", s );
+		console.llog( "Service register resolved:", s );
 		return s;
 	} );
 
 function registerService( srvc ) {
-	console.log( "Registering service(sid,name,desc):", mySID, srvc.name, srvc.description );
+	console.log( "Registering service(sid,name,desc):", mySID, srvc.service, srvc.description );
 	socket.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
@@ -226,7 +226,8 @@ function getLocation() {
 				here.macs.push( int[0].mac )
 	}
 	// move localhost address last.
-	if( config.internal_addresses[0].address == "::1" ) {
+	console.log( "internal:", config.internal_addresses )
+	if( config.internal_addresses.length && config.internal_addresses[0].address == "::1" ) {
 		var save = config.internal_addresses[0];
 		config.internal_addresses.splice( 0, 1 );
 		config.internal_addresses.push( save );

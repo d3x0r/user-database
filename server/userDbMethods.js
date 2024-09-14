@@ -1,6 +1,6 @@
 
 const ws = this;
-console.log("Extend this websocket:", this);
+//console.log("Extend this websocket:", this);
 
 const SaltyRNGModule = await Import("/node_modules/@d3x0r/srg2/salty_random_generator2.mjs");
 const SaltyRNG = SaltyRNGModule.SaltyRNG;
@@ -75,7 +75,7 @@ ws.request = function (domain, service) {
 }
 
 ws.processMessage = function (ws, msg) {
-	console.log("socket gets a turn?", msg);
+	//console.log("socket gets a turn?", msg);
 	if (msg.op === "login") {
 		if (msg.success)
 			;//Alert(" Login Success" );

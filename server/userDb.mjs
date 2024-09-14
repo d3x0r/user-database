@@ -420,10 +420,24 @@ export class Domain  extends StoredObject{
 		
 		const srvc = await new Promise( async (res,rej)=>{
 			//console.log( "---------------------------- GETTING SERVICE FROM DOMAIN:", name, forUser, this );
+			console.trace( "Why is name undefined?", name );
+			const registering = l.registrations.find( async service=>{
+				console.trace( "Looking at pending regirations...", service.msg, service.msg.service, name );
+				//const org = await Organization.get( service.org );
+				//if( !org ) return defer(0);
+				//const dmn = await org.getDomain( service.domain );
+				//if( !dmn ) return defer(1);
+				if( service.msg.description === name ) return true;
+				return false;
+	
+			} );
+
+			console.log( "looking at this services list...", this.services, registering )
 			const srvc = this.services.find( (srvc,idx)=>{
 				if( srvc instanceof Promise ) {
 					srvc.then( (srvc)=>{
 						if( srvc.name === name ){
+							//if( !srvc.)
 							resolved = true;
 							res( srvc );
 						}
@@ -432,9 +446,11 @@ export class Domain  extends StoredObject{
 					l.storage.map( srvc );
 					return false;
 				}
+				console.log( "srvc there can never be a promise?");
 				return( srvc.name===name );
 			} );
-			console.log( "domain.getservice result(reload not null, wait to create is undefined or null?)", srvc );
+			console.log( "domain.getservice result(reload not null, wait to create is undefined or null?)"
+				, name, srvc, this.services );
 			if( !srvc ) {
 				if( !promises.length) {
 					// don't allow guests to create services.
@@ -452,6 +468,7 @@ export class Domain  extends StoredObject{
 					if( !resolved ) rej();					 
 				});
 			}else {
+				console.log( "Should have free and active:", srvc.free, srvc.active)
 				res( srvc );
 			}
 		} );
@@ -484,6 +501,9 @@ class ServiceInstance {
 	get service() {
 		return this.#service;
 	}
+	get ws() {
+		return this.#ws;
+	}
 	set service( s ) {
 		if( s ) {
 			if( !this.#service ) 
@@ -495,7 +515,11 @@ class ServiceInstance {
 			this.#service = s;
 	}
 	async authorize( rid, forUser ) {
-		console.trace( "Authorize service....", !!this.#ws);
+		if( !this.#ws ) {
+			console.trace( "Chose a disconnected instance to try");
+			return;
+		}
+		console.trace( "Authorize service....", !!this.#ws, !!forUser );
 		const inst = this;
 		//console.log( "inst:", inst, forUser );
 		//console.log( "have to send something to a instance ...., to get it to accept, and get user info" );
@@ -550,9 +574,10 @@ class ServiceInstance {
 			this.#ws = null; // this isntance is no longer presnet
 		})
 		//console.trace( "---- Finally finish the connection for ws->inst tracking");
-		if( ws.readyState == 1 )
+		if( ws.readyState == 1 ) {
+			console.trace( "SEN register herer from server once with ok true (in connect(ws))");
 			ws.send( JSOX.stringify( { op:"register", ok:true, sid: this.sid } ) );
-		else
+		}else
 			console.trace( "This is a closed socket, why is it being connected?" );
 		return;
 	}
@@ -584,6 +609,12 @@ export class Service  extends StoredObject{
 	#instances = []; // actively tracked services... 
 	constructor() {
 		super( l.storage );
+	}
+	get free() {
+		return this.#free_instances;
+	}
+	get active() {
+		return this.#active_instances;
 	}
 	
 	set( domain, name, forUser ) {
@@ -625,6 +656,7 @@ export class Service  extends StoredObject{
 		const i = Math.floor(Math.random()*this.#active_instances.length);
 		if( this.#active_instances.length > i ) {
 			const inst = this.#active_instances[i];
+			console.log( "picking up a authorized instance for user", forUser, inst );
 			return inst.authorize( forUser );
 		}
 	}
@@ -632,6 +664,7 @@ export class Service  extends StoredObject{
 	getConnectedInstance( ) {
 		//console.trace( "Okay this has to look at pending, and connected instances");
 		const i = Math.floor(Math.random()*this.#active_instances.length);
+		console.log( "active instances(some aren't active!):", this.#active_instances );
 		if( this.#active_instances.length > i ) {
 			const inst = this.#active_instances[i];
 			//console.log( "Found an active instance to return:", inst );
@@ -672,6 +705,7 @@ export class Service  extends StoredObject{
 						inst.set( sid );//.connect( ws );  connect is handled when this returns...
 						// this.instances already has this.
 						//this.instances.push( inst.sid );
+						console.log( "This is adding an instance to active instances (from free?)");
 						this.#active_instances.push(inst );
 						this.#instances.push( inst );
 						//this.store();
@@ -692,22 +726,30 @@ export class Service  extends StoredObject{
 		if( this.#free_instances.length ) {
 			const newinst = this.#free_instances.pop();
 			inst.set( newinst );
+			console.log( "Found a free instance to use for this...", newinst );
 		}else {
 			inst.set();
 			this.instances.push( inst.sid );
 		}
+		ws.onclose = (code,reason)=>{
+			console.log( "Onclose now removes active instances...", ws, );
+			for( let n = 0; n < this.#active_instances.length; n++ ) {
+				if( this.#active_instances[n].ws === ws ) {
+					console.log( "did find a instance to grab..", this.#free_instances );
+					this.#free_instances.push( this.#active_instances[n] );
+					this.#active_instances.splice( n, 1 );
+					break;
+				}
+			}
+		};
 		inst.connect( ws );
+		console.log( "and instance should be added to active instances");
 		this.#active_instances.push(inst );
 		this.#instances.push( inst );
 		this.store();
 		return inst;
 	}
 
-	addInstance_( inst ) {
-		this.instances.push( inst.sid );
-		this.#free_instances.push( inst.sid );
-		this.#instances.push( inst );
-	}
 	setInstance( oldsid, sid )
 	{
 		if( oldsid ) {
@@ -756,16 +798,9 @@ export class Service  extends StoredObject{
 		try {
 			if( !field ) {
 				// finalize object initialization.
+				// all existing are now free...
 				this.srvc.#free_instances = this.instances.slice();
 				//console.log( "reloaded? fix sashes?", this )
-				if(0) // thisshould only happen when a instance connects; otherwise no tracking info needed.
-				for( let sid of this.srvc.instances ) {
-					// rebuild service instances.
-					const inst = new ServiceInstance();
-					inst.sid = sid;
-					inst.service = this;
-					this.srvc.addInstance_( inst );
-				}
 				return this.srvc;
 			}
 			// possible redirection of arrays and members...
@@ -1174,9 +1209,9 @@ const UserDb = {
 	socketHandleRequest,
 	// register a service... this essentially blocs 
 	async getService( ws, service ) {
-		console.log( 'this is called when a service registers...', service.description )
+		console.trace( 'this is called when a service registers...', "(name)",service.name, "(service)",service.service, service.description )
 		function defer(why) {
-			console.log( "Service:", service.description, " has to wait for registration...", why);
+			console.log( "Service:", service.description, " has to wait for registration...", why==2?"Service request pending":why);
 			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };
 			reg.p = new Promise( (res,rej)=>{
 				reg.res = res; reg.rej=rej;
@@ -1186,27 +1221,26 @@ const UserDb = {
 			return reg.p;
 		}
 		//if( !ws.state.user ) return defer();
-		console.log( "GET (registration?) service:", ws.connection.remoteAddress, service.description );
+		//console.log( "GET (registration?) service:", ws.connection.remoteAddress, service.description );
 		const org = await Organization.get( service.org );
 		if( !org ) return defer(0);
 		const dmn = await org.getDomain( service.domain );
 		if( !dmn ) return defer(1);
 		
-		console.log( "yes this is the client...")
 		const oldService = await dmn.getService( service.service, null );
 		if( !oldService ) return defer(2);
 		
-		console.log( "Resulting with service( unless defeerred)" );
+		//console.log( "Resulting with service( unless defeerred)" );
 		return oldService;
 	},
 	async requestService( domain, service, forUser ) {
 
 		let oldDomain = await l.domains.get( domain );
 		//console.log( "Domain:", domain, oldDomain, forUser );
-		if( !oldDomain ) 
-			await createInitialDomain( domain, service, forUser );
-		oldDomain = await l.domains.get( domain );
-		//console.log( "Have a domain now, doncha?", domain, service, oldDomain );
+		// this is actually check pending registrations (which might only be a service and not a domain.)
+		createInitialDomain( domain, service, forUser );
+
+		console.log( "Have a domain now, doncha?", domain, service, oldDomain );
 		const oldService = await oldDomain?.getService( service, forUser );
 
 		if( !oldDomain || !oldService ) {

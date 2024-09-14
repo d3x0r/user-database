@@ -387,7 +387,7 @@ export class UserServer extends Protocol {
 			const msg = JSOX.parse( msg_ );
 			//console.log( 'userLocal message:', msg );
 			if( msg.op === "register" ) {
-				console.log( "This will be a pending service registration");
+				//console.log( "This will be a pending service registration");
 				handleServiceMsg( ws, msg );
 				//ws.send( methodMsg );
 			} else if( msg.op === "expect" ) {
@@ -678,7 +678,7 @@ export class UserServer extends Protocol {
 	async function handleServiceMsg( ws, msg ){
 		// msg.org is 'org.jsox' from the client
 		// sid is the last SID we assigned.
-		console.log( "Service message:", msg );
+		//console.log( "Service message:", msg );
 		if( msg.sid ) {
 			console.log( "service is asking to reconnect...", msg.sid );
 			// this will wait until a client asks for this service; even on reconnect
@@ -697,15 +697,12 @@ export class UserServer extends Protocol {
 		} 
 		else 
 		{
-			//console.log( "otherwise find the service (post reg)", msg );
+			console.log( "otherwise find the service (post reg)", msg );
 			// msg has addr:[], iaddr:[], loc:(uid), sid:false, op:register
 			//       , svc:{badges,description,domain,or,service}
 			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
 				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
-				s = s.addInstance( ws );
-				s.connect( ws );
-				//ws.send( JSOX.stringify( { op:"registered" }) )
-				return s;
+				return s.addInstance( ws );
 			} );
 			if( svcInst ) {
 				// register service finally gets a result... and sends my response.
@@ -723,7 +720,7 @@ export class UserServer extends Protocol {
 
 	async function getUserService( ws, msg ) {
 		// domain, service
-		//console.log( "Calling requestservice", ws.state );
+		console.log( "Calling requestservice", ws.state );
 		//console.log( "So this request should have a user..." );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
 		if( inst ) {
