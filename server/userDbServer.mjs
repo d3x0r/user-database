@@ -23,26 +23,6 @@ const config = (await import( ((process.platform=="win32")?"file://":"")+process
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 const withLoader = true;//process.env.SELF_LOADED;
 // make sure we load the import script
-if(0)
-	if( !withLoader ) {        
-		new sack.Task( { 
-			work : process.cwd(),
-                        bin:process.argv[0],
-                        args:[ "--experimental-loader=../../../import.mjs" ,...(process.argv.slice(1))],
-                        env:{
-                        	SELF_LOADED:"Yup",
-                        }, // extra environment.
-			input( buffer ) {
-				console.log( buffer.substr(0,buffer.length-1) );
-			},
-			newGroup : false,
-			newConsole : false,
-			end() { 
-				//console.log( "ended.." );
-				return process.exit() 
-			},
-		} );
-	}
 
 const JSOX = sack.JSOX;
 import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
@@ -76,11 +56,11 @@ function getCertChain( ) {
         //SSLCertificateKeyFile /etc/letsencrypt/live/d3x0r.org/privkey.pem
 
         if( process.env.SSL_PATH ) return process.env.SSL_PATH + "/fullchain.pem"
-        return  parentRoot + "/certgen/cert-chain.pem"
+        return  nearPath + "/certgen/cert-chain.pem"
 }
 function getCertKey( ) {
         if( process.env.SSL_PATH ) return process.env.SSL_PATH + "/privkey.pem"
-        return  parentRoot + "/certgen/rootkeynopass.prv"
+        return  nearPath + "/certgen/rootkeynopass.prv"
 }
 
 const certChain = read( getCertChain() );
