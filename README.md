@@ -61,7 +61,32 @@ The browser then makes a connection to the requested service, and sends the uniq
 
 
 
+## User Information
 
+Users end up with a profile of services they have accessed, because services have badges that identify specific rights, and domains have sashes of badges that can be given to users.
+The first user to connect to a service is identified as having created the sashes and badges, and gets a sash that has all badges.
+Other users than the first get a default sash, with default badges.
+
+When creating an account, the display name is kept clear, the account name is also kept in the clear (for indexing reasons?), the email and password are hashed before being sent to the server.
+The server has no choice except to accept and store the hashes.
+
+Sashes can be created by (anyone?), and any badges they have on any sashes they have can be put on the sash, and the sash given to a user.
+
+Users, again, have a default sash, which can be reassigned to a new sash.  The login server itself is supposed to provide a service which 
+allows such managment interfaces to work... this is an In-Dev feature, with not enough valid information on usage of the system.
+
+## Service Information
+
+- org : organization the domain and service belongs to
+- domain : a website domain sort of name; a valid hostname
+- service : a name of a service to request
+- description : a long description about the service meant to be read by humans.
+
+- Badges : an array of available badges for the service.  Some services may have many permissions, some just have a few.
+- Sashes : Sashes defined for the service.
+
+All of the above information is kept in clear text in storage, and by usage.  This is all meant to be public information anyway,
+although it's not nessecarily immdiately obvious, like Badges an Sashes.
 
 ## Example code below
 
