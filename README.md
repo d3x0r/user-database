@@ -1,9 +1,29 @@
 
 # User Database Service
 
+This is a federated user login service.
+
+TBD - hooks to other login providers (github/google/etc...)
+
+User information is stored as opaquely as possible.  The User's Display name is visible, but then it's meant to be
+visible to everyone anyway.  The users account name is kept in a non-reversible hash, same with the users email, and password.
+
+User email isn't needed for the system other than account recovery; at which point the UI will be asking the user for their email.  The email can be found
+by hashing the the provided email, and looking up the account record; at which point data can be updated, or the email, now available from the user, can be
+used to send an email confirmation link. The User's email otherwise is not needed, since any notifications they would receive would be from applications 
+connecting to services which this works as a go-between for.
+
+This tracks services more transparently.  Services are registered with an `org` which is used as a friendly name for the domain, or a collective name for
+many domains; services also register a `domain` which is meant to be a genuine web domain, but there's really nothing yet enforcing that.
+Services also provide their `service` name, which can be used to find them... a domain of d3x0r.org might have a `tron-lightcycle` service.  and a `description` for the service
+which is to provide more information about the service.
 
 
-## Heroku app
+## Running
+
+This started as a possible heroku app; but there's no persistent storage that way. Which is why it evolved to being
+able to work against databases instead of container storage, for which both are just as `key-data` stores.
+
 
 `npm run start`
 
