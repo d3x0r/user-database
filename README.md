@@ -7,12 +7,46 @@
 
 `npm run start`
 
-This starts a heroku app...
+This starts user database server app...
+
+The following environment variables control execution.
+
+|name|value|
+|----|----|
+| PORT| port number to serve on defaults to ::0 |
+| DSN | database connection to user(may be database or storage container backend |
+| SSL_PATH | /etc/letsencrypt/live/... ; where the SSL certificate to serve TLS sould be sourced from reads /fullchain.pem and /privkey.pem |
+
 
 
 ## Usage
 
 
+This serve HTML fragments with scripts.  Requests for resources may be done over a single websocket connection (this is experimental).
+
+A Service that wants a user login, first connects to the user database server.  It defines the parameters for its service identity with files
+in the current working directory when that process loads.  The service will not immediately exist or be tracked, and certain conditions may make idenifiers
+for the service entirely invalid.  
+
+The Service will serve an application to a browser, and part of that application will connect to the login server (with a different protocol?) and
+be able to show forms to handle user entry; forms can be controlled with CSS (It is posssible to also serve entirely custom HTML fragments for the login form, and still use the login scripts).
+So the browser application will do a login, and on success request a service.
+
+If that service is new, and is pending registration, then the service is contacted, and its registration completes for a first time.  
+
+If the service is already existing, or now exists, then the service is told to `expect(user)` that is it's given a unique identifier for the user for that service, the user name, 
+and the service results with a unique identifier. The unique identifier is then sent to the user, with the address of the service to connect to (which may be different than `location`, but probably not).
+
+The browser then makes a connection to the requested service, and sends the unique key the service sent.  All communications should be done over HTTPs.
+
+
+
+
+
+## Example code below
+
+
+These minimal fragments might be things supplied.  Each implementation of a service refines this more, the last pass has a client login.js and a server login.mjs that export just 1 or 2 things each.
 
 ### Service
 
