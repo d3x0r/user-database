@@ -14,14 +14,55 @@ const here = new URL(import.meta.url);
 import { popups, AlertForm } from "/node_modules/@d3x0r/popups/popups.mjs"
 import { JSOX } from "/node_modules/jsox/lib/jsox.mjs"
 //console.log( "location:", location, import.meta );
+
 let workerInterface = null;
 const importing = import(here.origin + "/node_modules/@d3x0r/socket-service/swc.js").then((module) => {
 	workerInterface = module.workerInterface;
 	workerInterface.initWorker();
 }).catch((err) => {
+	// might not support workers... maybe we can just serve the websockets?
+	workerInterface = {
+		//res( workerInterface.connect(addr, protocol || "login", status, processMessage) );
+		async connect(addr,protocol,status, processMessage ) {
+			return new Promise( (res,rej)=>{
+				const ws = new WebSocket( addr, protocol );
+				const events = {
+					close:[],
+				}
+				ws.onopen = (evt)=>{
+					console.log( "websocket connected?")
+					res( socket );
+				}
+				ws.onmessage = (evt)=>{
+					processMessage( socket, evt.data );
+				}
+				ws.onclose = (evt)=>{
+					console.log( "websocket closed?", evt)
+				}
+				const socket = {
+					setUiLoader() {},
+					close() {},
+					on(a,b){
+						if( a == "close" ) {
+							if( "function" == typeof b )
+								events.close.push(b);
+						}
+						else 
+							ws.on(a,b);
+					},
+					//processMessage( ws,msg) {},
+					send(a) {
+						ws.send(a);
+					},
+				}
+			})
+		}
+	}
+	/*
 	if (!alertForm) alertForm = new AlertForm();
 	alertForm.caption = "Site does not support socket-service.\n" + err.message;
 	alertForm.show();
+	*/
 });
 //import {workerInterface} from location.origin+"/socket-service-client.js"
 
