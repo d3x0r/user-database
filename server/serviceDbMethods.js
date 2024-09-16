@@ -52,7 +52,7 @@ srvc.loc = loc;
 srvc.addr = config.addresses;
 srvc.iaddr = config.internal_addresses;
 srvc.port = opts.port ;
-
+//console.log( " ------------- Initialized Service Params ------------- ", srvc)
 
 function registered( socket,msg ) {
 	// record accepted Service ID resulting from registration.
@@ -73,7 +73,7 @@ function registered( socket,msg ) {
 const events = {};
 
 socket.processMessage = function( msg ) {
-	console.trace( "ServiceDbMethods handle message:", msg );
+	//console.trace( "ServiceDbMethods handle message:", msg );
 	if( msg.op === "register" ) {
 		registered( socket, msg );
 		return true;
@@ -81,8 +81,11 @@ socket.processMessage = function( msg ) {
 		// this looks like just a reply.
 		// the message calls on("expect", msg ) in order
 		// to get a unique key to send to the connecting client.
-		console.log( "Sending ON request to get result" );
-	    socket.send( {op:'expect', id:msg.id
+		//console.log( "Sending ON request to get result" );
+		// on returns an array of all the results of registered expect handlers...
+		// it used to return a single value, but all in the chain may return a different value.
+		// registration order is not guaranteed except by luck of first come first register.
+		socket.send( {op:'expect', id:msg.id
 					, addr:{ addr:srvc.addr, port:srvc.port }
 					, key:on( "expect", msg ) } );
 		return true;
@@ -101,7 +104,7 @@ if( srvc instanceof Array ) {
 	} );
 
 function registerService( srvc ) {
-	console.log( "Registering service(sid,name,desc):", mySID, srvc.service, srvc.description );
+	//console.log( "Registering service(sid,name,desc):", mySID, srvc.service, srvc.description );
 	socket.send( { op:"register", sid:mySID, svc:srvc } );
 	const p = {p:null,res:null,rej:null};
 	p.p = new Promise((res,rej)=>{p.res=res;p.rej=rej});
