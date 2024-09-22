@@ -1,9 +1,11 @@
 
 //console.log( "meta?", import.meta );
-//const _debug = true;
+const debug_ = false;
+const debug_messages_ = false;
 const _debug_email = false;
 const enable_device_tracking = false;
 const track_unique_identifiers = false;
+const enable_reconnect = true;
 
 import DNS from 'dns';
 
@@ -180,19 +182,23 @@ export class UserServer extends Protocol {
 		this.on("accept", (ws)=>this.accept(ws) );
 		this.on("connect", (ws,myWS)=>this.connect(myWS) );
 		const this_ = this;
-	this.server.server.on( "lowError",function (error, address, buffer) {
-		if( error !== 1 ) 
-			console.log( "Low Error with:", error, address, buffer  );
-		if( buffer )
-			buffer = new TextDecoder().decode( buffer );
-		this_.server.server.disableSSL(buffer); // resume with non SSL
-	} );
+		this.server.server.on( "lowError",function (error, address, buffer) {
+			if( error !== 1 ) 
+				console.log( "Low Error with:", error, address, buffer  );
+			if( buffer )
+				buffer = new TextDecoder().decode( buffer );
+			this_.server.server.disableSSL(buffer); // resume with non SSL
+		} );
 
 		console.log( "File handler is a protocol level handler... should only add once?" );
 		this.addFileHandler();
 	}
 
 	accept(ws){
+		if( !ws.headers ) {
+			console.log( "Incomplete socket request:", ws );
+			return false;
+		}
 		const protocol = ws.headers["Sec-WebSocket-Protocol"];
 
 		//console.log( "accept?", protocol );
@@ -224,7 +230,7 @@ export class UserServer extends Protocol {
 	connect(ws) {
 		const MyWS = ws; // we do get a MyWS in connect.
 		//const ws = MyWS.ws;
-		//console.log( "Connect:", ws );
+		console.log( "Connect:", ws );
 		const protocol = ws.ws.headers["Sec-WebSocket-Protocol"];
 		let user = null;
 		console.log( "protocol:", protocol )
@@ -384,7 +390,7 @@ export class UserServer extends Protocol {
 		function handleClient( ws, msg_ ) {
 			ws = MyWS;
 			const msg = JSOX.parse( msg_ );
-			console.trace( 'UserDbServer message:', msg );
+			debug_messages_ && console.trace( 'UserDbServer message:', msg );
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
@@ -396,6 +402,8 @@ export class UserServer extends Protocol {
 					getUserService( ws, msg );
 				} else if( msg.op === "login" ){
 					doLogin( ws, msg );
+				} else if( enable_reconnect && msg.op === "resume" ){
+					resume( ws, msg );
 				} else if( msg.op === "device" ){
 					addDevice( ws, msg );
 				} else if( msg.op === "guest" ){
@@ -492,11 +500,38 @@ export class UserServer extends Protocol {
 			//console.log( "User is set in the client's ws.state (but not the services..." );
 			ws.state.user= user;
 			ws.send( JSON.stringify( { op:"guest", success: true } ));
+			{
+				const key = sack.Id();
+				UserDb.saveContinue( user, key );
+				ws.send( JSON.stringify( {op:"set", value:"resume", key }));
+			}
 			return;
 		}
 		//console.log( "sending false" );
 		//console.log( "guest password failure" );
 		ws.send( JSON.stringify( { op:"guest", success: false } ));
+	}
+
+	async function resume( ws, msg ){
+		const user = await UserDb.resume( msg.id );
+		if( user ) {
+			// they had the resume key, so password/email/etc are them... 
+			ws.state.user = user;
+
+			// login could be replayed instead?
+			//ws.state.login = msg;
+			if( user.guest )
+				ws.send( JSON.stringify( { op:"guest", success: true } ));
+			else
+				ws.send( JSON.stringify( { op:"login", success: true } ));
+
+			{
+				const key = sack.Id();
+				UserDb.saveContinue( user, key );
+				ws.send( JSON.stringify( {op:"set", value:"resume", key }));
+			}
+		}
+		else console.log( "Resume ID didn't match a user?", msg );
 	}
 
 	async function doLogin( ws, msg ){
@@ -537,6 +572,7 @@ export class UserServer extends Protocol {
 		}
 		
 		ws.state.user = user;
+		ws.state.user.authorize = true; // not guest
 		ws.state.login = msg;
 		if( enable_device_tracking ) {
 			const dev = await user.getDevice( msg.deviceId );
@@ -555,8 +591,14 @@ export class UserServer extends Protocol {
 			}
 		}
 		//console.log( "sending false" );
-		console.log( "Otherwise I guess it's true?" );
+		//console.log( "Otherwise I guess it's true?" );
 		ws.send( JSON.stringify( { op:"login", success: true } ));
+		if( enable_reconnect ) {
+			const key = sack.Id();
+			UserDb.saveContinue( user, key );
+			ws.send( JSON.stringify( {op:"set", value:"resume", key }));
+		}
+
 	}
 
 	function validateUsername( n ) {
@@ -695,12 +737,10 @@ export class UserServer extends Protocol {
 			// waiting to be allowed...
 		}
 	}
-	function handleBadgeDef( ws, msg ){
-	}
 
 	async function getUserService( ws, msg ) {
 		// domain, service
-		console.log( "Calling requestservice", ws.state );
+		debug_ && console.log( "Calling requestservice", ws.state );
 		//console.log( "So this request should have a user..." );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
 		if( inst ) {

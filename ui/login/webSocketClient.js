@@ -242,6 +242,11 @@ const l = {
 		return l.ws.request(domain, service);
 	},
 	openSocket: openSocket,
+	resume() {
+		if( l.ws )
+			return l.ws.resume();
+		return false;
+	},
 	events: {},
 	on(evt, d) {
 		if ("function" === typeof d) {
@@ -285,6 +290,10 @@ function processMessage(ws,msg_) {
 
 			})
 			if (l.loginForm) l.loginForm.connect();
+			// result should trigger normal events in login form to close.
+			p.then( ()=>{
+				ws.resume();
+			});
 		} catch (err) {
 			console.log("Function compilation error:", err, "\n", msg.code);
 		}

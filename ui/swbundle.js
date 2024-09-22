@@ -1,5 +1,3 @@
-'use strict';
-
 //"use strict";
 // jsox.js
 // JSOX JavaScript Object eXchange. Inherits human features of comments
@@ -4543,7 +4541,9 @@ let found = null;
 					return p;
 				}
 			}
-			return fetch(event.request);
+			return fetch(event.request).catch( (err)=>{
+				console.log( "thrown error isn't caught by paernt?", err );
+			} );
 		})()
 	);
 }

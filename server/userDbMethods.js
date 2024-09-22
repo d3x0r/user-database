@@ -18,10 +18,19 @@ const l = {
 	pending: []
 }
 
+ws.resume = function () {
+	const key = localStorage.getItem( "sack/udb/resume" );
+	if( key ) {
+		ws.send(`{op:resume,id:${JSON.stringify(key)}}`);
+		return true;
+	}
+	return false;
+}
+
 ws.doLogin = function (user, pass) {
 	//ws.send(
 	pass = SaltyRNG.id(pass);
-	ws.send(`{op:"login",account:${JSON.stringify(user)},password:${JSON.stringify(pass)}
+	ws.send(`{op:login,account:${JSON.stringify(user)},password:${JSON.stringify(pass)}
         		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 
@@ -37,7 +46,7 @@ ws.doCreate = function (display, user, pass, email) {
 }
 ws.doGuest = function (user) {
 	//ws.send(
-	ws.send(`{op:"guest",user:${JSON.stringify(user)}
+	ws.send(`{op:guest,user:${JSON.stringify(user)}
         		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 }
@@ -89,12 +98,9 @@ ws.processMessage = function (ws, msg) {
 			return true;
 		} else
 			Alert("Login Failed...");
-
-	}
-	else if (msg.op === "create") {
+	} else if (msg.op === "create") {
 		if (msg.success) {
 			//Alert(" Login Success" );
-
 			localStorage.setItem("sack/udb/deviceId", msg.deviceId);
 		} else if (msg.ban) {
 			Alert("Bannable Offense");
@@ -110,7 +116,6 @@ ws.processMessage = function (ws, msg) {
 			Alert("Login Failed...");
 
 	} else if (msg.op === "set") {
-		console.log( "directly set:", msg.value, msg.key );
 		localStorage.setItem( "sack/udb/"+ msg.value, msg.key);
 		return true; // client doesn't care.
 	} else if (msg.op === "guest") {
