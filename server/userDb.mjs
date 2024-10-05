@@ -333,7 +333,7 @@ const UserDb = {
 
 	// register a service... this essentially blocs 
 	async getService( ws, service ) {
-		console.trace( 'this is called when a service registers...', "(name)",service.name, "(service)",service.service, service.description )
+		console.log( 'this is called when a service registers...', "(service)",service.service, service.description )
 		function defer(why) {
 			console.log( "Service:", service.description, " has to wait for registration...", why==2?"Service request pending":why);
 			const reg = { p:null, res:null,rej:null,msg:service,ws:ws };

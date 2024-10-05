@@ -230,10 +230,9 @@ export class UserServer extends Protocol {
 	connect(ws) {
 		const MyWS = ws; // we do get a MyWS in connect.
 		//const ws = MyWS.ws;
-		console.log( "Connect:", ws );
 		const protocol = ws.ws.headers["Sec-WebSocket-Protocol"];
 		let user = null;
-		console.log( "protocol:", protocol )
+		console.log( "Connect:", ws.ws.connection.remoteAddress, "protocol:", protocol )
 		ws.state = new LoginState( ws );
 		if( protocol === "userDatabaseClient" ) {
 			//console.log( "send greeting message, setitng up events" );
