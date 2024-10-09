@@ -214,6 +214,12 @@ const l = {
 				}
 			}
 			else {
+				if( !passField.value || !nameField2.value || !userField2.value || !emailField2.value ) {
+					if (!alertForm) alertForm = new AlertForm();
+					alertForm.caption = "Form not filled.  Blank fields are not allowed.";
+					alertForm.show();
+					return;
+				}
 				if (createMode) {
 					if (passField2.value === passField22.value)
 						l.ws.doCreate(nameField2.value, userField2.value, passField2.value, emailField2.value);
