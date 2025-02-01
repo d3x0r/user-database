@@ -20,6 +20,9 @@ import path from "path";
 import {sack} from "sack.vfs"
 import {getRequestHandler} from "sack.vfs/apps/http-ws";
 import {Protocol} from "sack.vfs/protocol";
+import { OAuth2Client} from "google-auth-library";
+const client = new OAuth2Client();
+
 const nativeDisk = sack.Volume();
 const config = (await import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox" )).default;
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
@@ -182,6 +185,11 @@ export class UserServer extends Protocol {
 		this.on("accept", (ws)=>this.accept(ws) );
 		this.on("connect", (ws,myWS)=>this.connect(myWS) );
 		const this_ = this;
+		// server app is a uexpress instance.
+		this.server.app.get( "/gsi/", (req, res)=>{
+			console.log( "Google Service Sent us a request?", req );
+		});
+		// server.server is the websocket itself
 		this.server.server.on( "lowError",function (error, address, buffer) {
 			if( error !== 1 ) 
 				console.log( "Low Error with:", error, address, buffer  );
@@ -393,14 +401,19 @@ export class UserServer extends Protocol {
 			try {
 				if( msg.op === "hello" ) {
 					//ws.send( methodMsg );
-				} else if( track_unique_identifiers && msg.op === "newClient" ){
-					newClient( ws, msg );
+				} else if( msg.op === "newClient" ){
+					if( track_unique_identifiers )
+						newClient( ws, msg );
+					else console.log( "Not tracking client identifiers, don't send server generated devkey...", msg );
 				} else if( msg.op === "request" ){
 					getUserService( ws, msg );
 				} else if( msg.op === "service" ){
 					getUserService( ws, msg );
 				} else if( msg.op === "login" ){
-					doLogin( ws, msg );
+					if( msg.google ) {
+						doLogin( ws, msg, true );
+					}else
+						doLogin( ws, msg, false );
 				} else if( enable_reconnect && msg.op === "resume" ){
 					resume( ws, msg );
 				} else if( msg.op === "device" ){
@@ -533,7 +546,7 @@ export class UserServer extends Protocol {
 		else console.log( "Resume ID didn't match a user?", msg );
 	}
 
-	async function doLogin( ws, msg ){
+	async function doLogin( ws, msg, google ){
 		if( track_unique_identifiers ) {
 			const isClient = await UserDb.getIdentifier( msg.clientId );
 			// just need SOME clientID.
@@ -547,8 +560,34 @@ export class UserServer extends Protocol {
 		}
 		console.log( 'waiting for a user forever?')
 		const user = await UserDb.getUser( msg.account );
-		console.log( "user:", user );
-		
+		console.log( "user:", google, user );
+		let externalCheckOk = false;
+		if( google ) {
+			const reply = await new Promise( (resolve,rej)=>{		
+
+				async function verify() {
+					return client.verifyIdToken({
+						idToken: msg.cred,
+						audience: "710795352839-q4n1q1ckih9erp8g3qfnifplc6o5mmre.apps.googleusercontent.com",  // Specify the WEB_CLIENT_ID of the app that accesses the backend
+						// Or, if multiple clients access the backend:
+						//[WEB_CLIENT_ID_1, WEB_CLIENT_ID_2, WEB_CLIENT_ID_3]
+					}).then( ticket=>{
+						
+						const payload = ticket.getPayload();
+						const userid = payload['sub'];
+						// If the request specified a Google Workspace domain:
+						// const domain = payload['hd'];
+						//console.log( "Guess userid is sub?", ticket, userid, msg.jwt.sub)
+						if( payload.sub == msg.jwt.sub ) {
+							externalCheckOk = true;
+							return true;
+						}
+					})
+				}
+				verify().then( resolve ).catch(rej);
+			} );
+			console.log( "thing:", reply );
+		}
 		/*
 		if( user && user.unique !== isClient ) {
 			// save meta relation that these clients used the same localStorage
@@ -564,7 +603,7 @@ export class UserServer extends Protocol {
 		*/
 
 		//console.log( "user:", user, msg.password );
-		if( !user || user.pass !== msg.password ) {
+		if( !externalCheckOk && ( !user || user.pass !== msg.password ) ) {
 			console.log( "No User or Bad password");
 			ws.send( JSON.stringify( { op:"login", success: false } ) );
 			return;
@@ -594,7 +633,7 @@ export class UserServer extends Protocol {
 		ws.send( JSON.stringify( { op:"login", success: true } ));
 		if( enable_reconnect ) {
 			const key = sack.Id();
-			UserDb.saveContinue( user, key );
+			UserDb.saveContinue( user, key, msg.deviceId );
 			ws.send( JSON.stringify( {op:"set", value:"resume", key }));
 		}
 

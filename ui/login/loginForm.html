@@ -51,30 +51,61 @@
 
 
 </center>
+<script class="clientLoadWait" >
+	let gsiClientLoadResolve = null;
+	let gsiClientLoadedWait = null;
+	function gsiClientLoaded(onLoad) {
+		if( !gsiClientLoadedWait ) gsiClientLoadedWait = new Promise( (res,rej)=>{gsiClientLoadResolve=res})
+		if( onLoad ) {
+			if( window.google && window.google.accounts) {
+				gsiClientLoadResolve(true);
+				gsiClientLoadResolve = null;
+			}
+			for( let wait of window.d3x0r.popups.scriptPending ) {
+				window.d3x0r.popups.onScriptDone( wait, ()=>{
+					if( window.google && window.google.accounts) {
+						gsiClientLoadResolve(true);
+						gsiClientLoadResolve = null;
+					}
+				} )
+			}
+			return gsiClientLoadedWait;
+		}
+		return gsiClientLoadedWait;
+	}
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="gsiClientLoaded(true)"></script>
 <script type="module">
 	import {wait, wsc} from "/node_modules/@d3x0r/user-database-remote/requestService.js"
-	console.log( "This wait blocks everything?" );
 	await wait;
-	console.log( "Because if we don't request..." );
 	const connection = wsc.connection;
-	//import {connection} from "/internal/loginServer"
 	import {popups} from "/node_modules/@d3x0r/popups/popups.mjs";
+	// rootId is a magic variable prepended to this script block, it can be used to find this
+	// script element; which is registered in popups...
 	const parent = popups.getFilledParent( rootId );
-	console.log( "can we fake the document cufrentScript thing?", parent, document.currentScript );
-	import( "/internal/gsi-client" ).then( module=>{
-		console.log( "Import of module?", module );
-		module.default.call( window, 
-			{ getElementsByTagName(name) { if( name === "head" ) { return [parent]; } return parent.querySelectorAll( name )} 
-			, getElementById(id) { return parent.querySelector( "#" + id ); }
-			, appendChild( child ) { return parent.appendChild( child ); }
-			, createElement(...args) { return document.createElement( ...args ); }
-			, _DumpException(e){console.log( 'exception dump:', e) }
-			, addEventListener(a,...args) { return document.addEventListener( a, ...args ); }
-			, currentScript:parent.querySelector( "#"+rootId )
-			, location
-			, body: parent
+
+	const scripts = document.querySelectorAll( "script");
+
+	async function waitForLoaded() {
+		if( !window.gsiClientLoaded ) {
+			const clw = document.querySelector( "script .clientLoadWait");
+			if( clw ) {
+				if( popups.isScriptRunning( clw.id ) ) {
+					return new Promise( (res,rej)=>{
+						popups.onScriptDone( clw.id, ()=>{
+							res(true);
+						} );
+					});
+				}
 			}
-		)
+		}
+		await gsiClientLoaded();
+	}
+	await waitForLoaded();
+
+	
+
+	{ // context to keep private functions private...
 		const buttonContainerSignIn = parent.querySelector( "#google-button-sign-in" );
 		const buttonContainerSignUp = parent.querySelector( "#google-button-sign-up" );
 		window.google.accounts.id.setLogLevel( "debug" );
@@ -84,14 +115,18 @@
 			prompt_parent: parent,
 			use_fedcm_for_prompt: true,
 			auto_select : false,
-			login_uri: "https://app.d3x0r.org:8399/gsi",
+			hd: "*", // hosted domain - comes back in JWT
+			//login_uri: "https://app.d3x0r.org:8399/gsi",
 			//prompt_parent_id: parent,
 			});
 		//window.google.accounts.id.
 		//window.google.accounts.id.disableAutoSelect(  );
-		google.accounts.id.revoke( "d3ck0r@gmail.com", (a)=>{
-			console.log( "revoke callback:", a );
-		})
+
+		if(0) 
+			google.accounts.id.revoke( "d3ck0r@gmail.com", (a)=>{
+				console.log( "revoke callback:", a );
+			})
+			
 		window.google.accounts.id.renderButton( buttonContainerSignUp, {
 			text: "signup_with",
 			click_listener: setupSignup
@@ -132,11 +167,11 @@ If you specified a hd parameter value in the request, verify that the ID token h
 */
 
 				const jwt = parseJwt( res.credential );
-				//console.log( "JSON?", jwt );
+				console.log( "JSON?", jwt );
 				if( !signin )
-					connection.ws.doCreate(jwt.name, jwt.email, jwt.sub, jwt.email);
+					connection.ws.doCreate(jwt.name, jwt.email, jwt.sub, jwt.email, res.credential, jwt );
 				else
-					connection.ws.doLogin(jwt.email, jwt.sub);
+					connection.ws.doLogin(jwt.email, jwt.sub, res.credential, jwt);
 			}
 		}
 		function parseJwt (token) {
@@ -151,7 +186,7 @@ If you specified a hd parameter value in the request, verify that the ID token h
 		function onSignout() {
 			google.accounts.id.disableAutoSelect();
 		}
-	});
+	}
 </script>
 	
 <!--script type="module" src="../login/webSocketClient.js" /-->

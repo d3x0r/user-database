@@ -27,26 +27,26 @@ ws.resume = function () {
 	return false;
 }
 
-ws.doLogin = function (user, pass) {
+ws.doLogin = function (user, pass,cred,jwt) {
 	//ws.send(
 	pass = SaltyRNG.id(pass);
-	ws.send(`{op:login,account:${JSON.stringify(user)},password:${JSON.stringify(pass)}
+	ws.send(`{op:login,account:${JSON.stringify(user)},password:${JSON.stringify(pass)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
         		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 
 }
-ws.doCreate = function (display, user, pass, email) {
+ws.doCreate = function (display, user, pass, email, cred,jwt ) {
 	//ws.send(
 	pass = SaltyRNG.id(pass);
 	email = SaltyRNG.id(email);
 	ws.send(JSON.stringify( {op:"create",account:user,password:pass
-            		,user:display,email:email
+            		,user:display,email:email, cred,jwt
         		,clientId:localStorage.getItem("sack/udb/clientId")
                         ,deviceId:localStorage.getItem("sack/udb/deviceId") }));
 }
-ws.doGuest = function (user) {
+ws.doGuest = function (user,cred,jwt) {
 	//ws.send(
-	ws.send(`{op:guest,user:${JSON.stringify(user)}
+	ws.send(`{op:guest,user:${JSON.stringify(user)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
         		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
 }
