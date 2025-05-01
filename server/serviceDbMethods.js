@@ -5,7 +5,8 @@ const _debug_location = false;
 
 //const ws = this;
 //console.log( "Extend this websocket:", this );
-console.log( "Service extension:", process.cwd() );
+//console.log( "Service extension:", process.cwd() );
+
 const serviceConfig = (await Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox")).default;
 const configPath = opts.configPath || "";
 
@@ -63,7 +64,7 @@ function registered( socket,msg ) {
 			mySID = msg.sid;
 			disk.write( "fs/mySid.jsox", msg.sid );
 		}
-		console.log( "issue registered connect here..." );
+		//console.log( "issue registered connect here..." );
 		socket.on( "connect", true );
 	} else {
 		console.log( "Failed to register Self" );
@@ -229,7 +230,8 @@ function getLocation() {
 				here.macs.push( int[0].mac )
 	}
 	// move localhost address last.
-	console.log( "internal:", config.internal_addresses )
+	//console.log( "internal:", config.internal_addresses )
+
 	if( config.internal_addresses.length && config.internal_addresses[0].address == "::1" ) {
 		var save = config.internal_addresses[0];
 		config.internal_addresses.splice( 0, 1 );
