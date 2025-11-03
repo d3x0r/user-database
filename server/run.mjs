@@ -11,7 +11,7 @@ if( !process.env.SELF_LOADED ) {
 	const opts = { 
 		work : process.cwd(),
                 bin:process.argv[0],
-                args:[ "--experimental-loader=../../../import.mjs" ,...(process.argv.slice(2))],
+                args:[ "--import", "sack.vfs/import" ,...(process.argv.slice(2))],
                 //firstArgIsArg:true, // default true
                 env:{
                 	SELF_LOADED:"Yup",

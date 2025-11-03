@@ -1,8 +1,6 @@
 import {sack} from "sack.vfs"
-const StoredObject = sack.ObjectStorage.StoredObject;
 
-
-import {l} from "../userDb.mjs"
+import {l,StoredObject} from "../userDb.mjs"
 
 
 export class Device  extends StoredObject{

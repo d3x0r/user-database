@@ -3,9 +3,8 @@ const debug_ = false;
 import {sack} from "sack.vfs"
 import { Organization } from "./Organization.mjs";
 import {Service} from "./Service.mjs"
-const StoredObject = sack.ObjectStorage.StoredObject;
 
-import {l,config_ as config, UserDb} from "../userDb.mjs"
+import {l,config_ as config, UserDb,StoredObject} from "../userDb.mjs"
 
 
 export class StoredDomain extends StoredObject {

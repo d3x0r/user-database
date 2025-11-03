@@ -1,10 +1,9 @@
 import {sack} from "sack.vfs"
 const JSOX = sack.JSOX;
-const StoredObject = sack.ObjectStorage.StoredObject;
 
 import {Badge} from "./Badge.mjs"
 import {Sash} from "./Sash.mjs"
-import {l} from "../userDb.mjs"
+import {l,StoredObject} from "../userDb.mjs"
 
 export class StoredService{
 	srvc = new Service();

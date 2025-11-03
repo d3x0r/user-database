@@ -2,17 +2,17 @@
 const debug_ = false;  // controls logging... 
 
 import {sack} from "sack.vfs"
+import {ObjectStorage} from "sack.vfs/object-storage"
+import {StoredObject} from "sack.vfs/object-storage-object"
 const JSOX=sack.JSOX;
 const stringifier = JSOX.stringifier();
 const config = await import( "file://"+process.cwd()+"/config.jsox" );
 export {config as config_}
-import {BloomNHash} from "@d3x0r/bloomnhash"
-import {SlabArray}  from "@d3x0r/slab-array"
+import {BloomNHash} from "sack.vfs/bloomnhash"
+import {SlabArray}  from "sack.vfs/slab-array"
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 
-const StoredObject = sack.ObjectStorage.StoredObject;
-//import {StoredObject} from "../commonDb.mjs"
-
+export {StoredObject};
 
 let inited = false;
 let initResolve = null;
