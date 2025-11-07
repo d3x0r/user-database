@@ -1,5 +1,4 @@
 import {sack} from "sack.vfs"
-
 import {l,StoredObject} from "../userDb.mjs"
 
 export class Badge  extends StoredObject{

@@ -35,6 +35,7 @@ const JSOX = sack.JSOX;
 import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
 
 const storageDb = sack.DB( process.env.DSN || config.dsn || "maria-udb");
+
 const storage = new ObjectStorage( storageDb );//( "fs/data.os" );
 UserDb.hook( storage );
 

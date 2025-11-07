@@ -198,7 +198,7 @@ const UserDb = {
 			l.email     = await storage.get( l.ids.emailId );
 			l.email.caseInsensitive = true;
 			l.account   = await storage.get( l.ids.accountId );
-			console.log( "reloading account map?", l.account, l.ids );
+			//console.log( "reloading account map?", l.account, l.ids );
 			l.account.caseInsensitive = true;
 			if( l.ids.nameId) 
 				l.name      = await storage.get( l.ids.nameId );
