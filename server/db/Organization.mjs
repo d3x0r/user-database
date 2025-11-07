@@ -1,7 +1,7 @@
 import {sack} from "sack.vfs"
 const JSOX = sack.JSOX;
 
-const StoredObject = sack.ObjectStorage.StoredObject;
+import {StoredObject} from "sack.vfs/object-storage-object"
 
 import { StoredDomain } from "./Domain.mjs";
 import {User} from "./User.mjs"

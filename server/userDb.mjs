@@ -6,12 +6,10 @@ const JSOX=sack.JSOX;
 const stringifier = JSOX.stringifier();
 const config = await import( "file://"+process.cwd()+"/config.jsox" );
 export {config as config_}
-import {BloomNHash} from "@d3x0r/bloomnhash"
-import {SlabArray}  from "@d3x0r/slab-array"
+import {BloomNHash} from "sack.vfs/bloomnhash"
+import {SlabArray}  from "sack.vfs/slab-array"
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 
-const StoredObject = sack.ObjectStorage.StoredObject;
-//import {StoredObject} from "../commonDb.mjs"
 
 
 let inited = false;
@@ -198,7 +196,7 @@ const UserDb = {
 			l.email     = await storage.get( l.ids.emailId );
 			l.email.caseInsensitive = true;
 			l.account   = await storage.get( l.ids.accountId );
-			console.log( "reloading account map?", l.account, l.ids );
+			//console.log( "reloading account map?", l.account, l.ids );
 			l.account.caseInsensitive = true;
 			if( l.ids.nameId) 
 				l.name      = await storage.get( l.ids.nameId );

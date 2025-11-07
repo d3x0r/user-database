@@ -1,6 +1,6 @@
 import {sack} from "sack.vfs"
 const JSOX = sack.JSOX;
-const StoredObject = sack.ObjectStorage.StoredObject;
+import {StoredObject} from "sack.vfs/object-storage-object"
 
 import {Badge} from "./Badge.mjs"
 import {Sash} from "./Sash.mjs"

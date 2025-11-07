@@ -1,5 +1,6 @@
 import {sack} from "sack.vfs"
-const StoredObject = sack.ObjectStorage.StoredObject;
+import {StoredObject} from "sack.vfs/object-storage-object"
+
 import {l} from "../userDb.mjs"
 
 export class UniqueIdentifier extends StoredObject {
