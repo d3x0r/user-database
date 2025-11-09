@@ -29,31 +29,48 @@ ws.resume = function () {
 
 ws.doLogin = function (user, pass,cred,jwt) {
 	//ws.send(
-	pass = SaltyRNG.id(pass);
-	ws.send(`{op:login,account:${JSON.stringify(user)},password:${JSON.stringify(pass)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
-        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
+	return new Promise( (res,rej)=>{
+		pass = SaltyRNG.id(pass);
+		const p = {res,rej,id:id:SaltyRng.Id()};
+		l.pending.push( p );
+		ws.send(`{op:login,id:${p.id},account:${JSON.stringify(user)},password:${JSON.stringify(pass)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
+	        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
+	} );
 
 }
 ws.doCreate = function (display, user, pass, email, cred,jwt ) {
 	//ws.send(
-	pass = SaltyRNG.id(pass);
-	email = SaltyRNG.id(email);
-	ws.send(JSON.stringify( {op:"create",account:user,password:pass
+	return new Promise( (res,rej)=>{
+		pass = SaltyRNG.id(pass);
+		email = SaltyRNG.id(email);
+		const p = {res,rej,id:id:SaltyRng.Id()};
+		l.pending.push( p );
+		ws.send(JSON.stringify( {op:"create",id:p.id,account:user,password:pass
             		,user:display,email:email, cred,jwt
         		,clientId:localStorage.getItem("sack/udb/clientId")
                         ,deviceId:localStorage.getItem("sack/udb/deviceId") }));
+	} );
 }
 ws.doGuest = function (user,cred,jwt) {
 	//ws.send(
-	ws.send(`{op:guest,user:${JSON.stringify(user)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
-        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
+	return new Promise( (res,rej)=>{
+		const p = {res,rej,id:id:SaltyRng.Id()};
+		l.pending.push( p );
+		ws.send(`{op:guest,id:${p.id},user:${JSON.stringify(user)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
+   	     		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
+	                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
+	} );
 }
 
 ws.getService = function (domain, service) {
 	//ws.send(
-	ws.send(`{op:"service",domain:${JSON.stringify(domain)},service:${JSON.stringify(service)}}`);
+	return new Promise( (res,rej)=>{
+		pass = SaltyRNG.id(pass);
+		const p = {res,rej,id:id:SaltyRng.Id()};
+		l.pending.push( p );
+		ws.send(`{op:"service",id:${p.id},domain:${JSON.stringify(domain)},service:${JSON.stringify(service)}}`);
+	} );
 }
 
 
@@ -86,9 +103,19 @@ ws.request = function (domain, service) {
 ws.processMessage = function (ws, msg) {
 	//console.log("socket gets a turn?", msg);
 	if (msg.op === "login") {
+		//console.log( "something:", msg );
+		let pend = null;
+		for( let p = 0; p < l.pending.length; p++ ) {
+			pend = l.pending[p];
+			if( l.pending[p].id === msg.id ) {
+				l.pending.splice(p,1);
+				break;
+			}
+		}
 		if (msg.success)
-			;//Alert(" Login Success" );
+			pend.res();//Alert(" Login Success" );
 		else if (msg.ban) {
+			pend.rej( "Bannable Offense");
 			Alert("Bannable Offense");
 			localStorage.removeItem("sack/udb/clientId"); // reset this
 			ws.close(1000, "Client respecting ban, and resetting");
@@ -96,14 +123,26 @@ ws.processMessage = function (ws, msg) {
 			//temporary failure, this device was unidentified, or someone elses
 			ws.send(JSON.stringify({ op: "device", deviceId: SaltyRNG.Id() }));
 			return true;
-		} else
+		} else {
+			pend.rej( "Login Failed");
 			Alert("Login Failed...");
+		}
 	} else if (msg.op === "create") {
+		let pend = null;
+		for( let p = 0; p < l.pending.length; p++ ) {
+			pend = l.pending[p];
+			if( p.id === msg.id ) {
+				l.pending.splice(p,1);
+				break;
+			}
+		}
 		if (msg.success) {
 			//Alert(" Login Success" );
+			pend.res();
 			localStorage.setItem("sack/udb/deviceId", msg.deviceId);
 		} else if (msg.ban) {
-			Alert("Bannable Offense");
+			pend.rej( "Bannable Offense" );
+			//Alert("Bannable Offense");
 			localStorage.removeItem("sack/udb/clientId"); // reset this
 			ws.close(1000, "Create count respecting ban, resetting");
 		} else if (msg.device) {
@@ -112,23 +151,31 @@ ws.processMessage = function (ws, msg) {
 			localStorage.setItem("sack/udb/deviceId", newId);
 			ws.send(JSON.stringify({ op: "device", deviceId: newId }));
 			return true;
-		} else
+		} else {
+			pend.rej( "Login Failed" );
 			Alert("Login Failed...");
+		}
 
 	} else if (msg.op === "set") {
 		localStorage.setItem( "sack/udb/"+ msg.value, msg.key);
 		return true; // client doesn't care.
 	} else if (msg.op === "guest") {
+		let pend = null;
+		for( let p = 0; p < l.pending.length; p++ ) {
+			pend = l.pending[p];
+			if( p.id === msg.id ) {
+				l.pending.splice(p,1);
+				break;
+			}
+		}
 		if (msg.success) {
 			;//Alert(" Login Success" );
 		} else
 			Alert("Login Failed...");
 	} else if (msg.op === "expect") {
-		debugger;
 		ws.on( "expect", msg );
 	} else if (msg.op === "device") {
 		console.log( "Device specified is inactive - too many devices?" );
-		debugger;
 		ws.on( "deviceInactive", msg );
 	} else if (msg.op === "pickSash") {
 		// this is actually a client event.
