@@ -25,6 +25,7 @@ export class ServiceInstance {
 		return this.#service;
 	}
 	get ws() {
+		console.log( "get ws(), This.#ws isn't right?", this.#ws );
 		return this.#ws;
 	}
 	set service( s ) {
@@ -74,7 +75,7 @@ export class ServiceInstance {
 			return;
 		}
 		if( "string" !== typeof msg ) msg = JSOX.stringify( msg );
-		console.trace( "asdf", msg );
+		//console.trace( "asdf", msg );
 		if( this.#ws.readyState === 1 )
 			this.#ws.send(msg);
 		else console.trace( " tried to send to a closed socket..." );
@@ -85,7 +86,7 @@ export class ServiceInstance {
 		//	this.#service.setInstance( this.sid, sid );
 		//if( this.sid && sid !== this.sid ) console.log( "DIfferent SID", sid, this.sid );
 		//this.sid = sid;
-		//console.trace( "Setting websocket:", ws );
+		//console.trace( "Setting websocket on connect? (client?):", ws );
 		if( this.#ws && this.#ws !== ws ) {
 			console.log( "This should probably be a fatal error, but it can be that a service restarts and doesn't notify the host properly..." );
 			this.#ws.close( 1000, "Connection replaced with yourself" );
@@ -93,12 +94,12 @@ export class ServiceInstance {
 		//console.log( "This service instance is now connected this this socket:", ws );
 		this.#ws = ws;
 		this.#ws.on( "close", (a,b)=>{
-			console.log( "Hope this doesn't steam the close event...");
+			console.trace( "Service... Hope this doesn't steal the close event...", a, b, this.#ws);
 			this.#ws = null; // this isntance is no longer presnet
 		})
 		//console.trace( "---- Finally finish the connection for ws->inst tracking");
 		if( ws.readyState == 1 ) {
-			console.trace( "SEN register herer from server once with ok true (in connect(ws))");
+			console.trace( "SEND register here from server once with ok true (in connect(ws))");
 			ws.send( JSOX.stringify( { op:"register", ok:true, sid: this.sid } ) );
 		}else
 			console.trace( "This is a closed socket, why is it being connected?" );
@@ -266,7 +267,7 @@ export class Service  extends StoredObject{
 		}
 
 		ws.onclose = (code,reason)=>{
-			console.log( "Onclose now removes active instances...", ws, );
+			//console.log( "Onclose now removes active instances...", ws, );
 			for( let n = 0; n < this.#active_instances.length; n++ ) {
 				if( this.#active_instances[n].ws === ws ) {
 					console.log( "did find a instance to grab..", this.#free_instances );

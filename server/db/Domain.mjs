@@ -12,9 +12,9 @@ export class StoredDomain extends StoredObject {
 
 export function domainFromJSOX(field,val) {
 	if( !field ) {
-		console.log( "domain from JSOX this?", this );
+		//console.log( "domain from JSOX this?", this );
 		this.domain.services.forEach( service=>((service instanceof Promise)?service.then(service=>service.set(this)):service.set( this )) );
-		console.log( "resolve with:", this.domain );
+		//console.log( "resolve with:", this.domain );
 		return this.domain;
 	}
 	if( field === "services" ) {

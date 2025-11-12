@@ -381,7 +381,7 @@ const UserDb = {
 		}*/
 		//return oldService;
 		const inst = oldService.getConnectedInstance();
-		console.log( "forUser", forUser );
+		console.log( "forUser", forUser, inst );
 		return inst;
 	},
 

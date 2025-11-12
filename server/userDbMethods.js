@@ -19,19 +19,23 @@ const l = {
 }
 
 ws.resume = function () {
-	const key = localStorage.getItem( "sack/udb/resume" );
-	if( key ) {
-		ws.send(`{op:resume,id:${JSON.stringify(key)}}`);
-		return true;
-	}
-	return false;
+	return new Promise( (res,rej)=>{
+		const key = localStorage.getItem( "sack/udb/resume" );
+		if( key ) {
+			const p = {res,rej,id:SaltyRNG.Id()};
+			l.pending.push( p );
+			ws.send(`{op:resume,id:${p.id},uid:${JSON.stringify(key)}}`);
+		}
+		else
+			rej();
+	} );
 }
 
 ws.doLogin = function (user, pass,cred,jwt) {
 	//ws.send(
 	return new Promise( (res,rej)=>{
 		pass = SaltyRNG.id(pass);
-		const p = {res,rej,id:id:SaltyRng.Id()};
+		const p = {res,rej,id:SaltyRNG.Id()};
 		l.pending.push( p );
 		ws.send(`{op:login,id:${p.id},account:${JSON.stringify(user)},password:${JSON.stringify(pass)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
 	        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
@@ -44,7 +48,7 @@ ws.doCreate = function (display, user, pass, email, cred,jwt ) {
 	return new Promise( (res,rej)=>{
 		pass = SaltyRNG.id(pass);
 		email = SaltyRNG.id(email);
-		const p = {res,rej,id:id:SaltyRng.Id()};
+		const p = {res,rej,id:SaltyRNG.Id()};
 		l.pending.push( p );
 		ws.send(JSON.stringify( {op:"create",id:p.id,account:user,password:pass
             		,user:display,email:email, cred,jwt
@@ -55,7 +59,7 @@ ws.doCreate = function (display, user, pass, email, cred,jwt ) {
 ws.doGuest = function (user,cred,jwt) {
 	//ws.send(
 	return new Promise( (res,rej)=>{
-		const p = {res,rej,id:id:SaltyRng.Id()};
+		const p = {res,rej,id:SaltyRNG.Id()};
 		l.pending.push( p );
 		ws.send(`{op:guest,id:${p.id},user:${JSON.stringify(user)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
    	     		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
@@ -67,7 +71,7 @@ ws.getService = function (domain, service) {
 	//ws.send(
 	return new Promise( (res,rej)=>{
 		pass = SaltyRNG.id(pass);
-		const p = {res,rej,id:id:SaltyRng.Id()};
+		const p = {res,rej,id:SaltyRNG.Id()};
 		l.pending.push( p );
 		ws.send(`{op:"service",id:${p.id},domain:${JSON.stringify(domain)},service:${JSON.stringify(service)}}`);
 	} );
@@ -90,7 +94,7 @@ ws.request = function (domain, service) {
 	pend.p = new Promise((res, rej) => {
 		pend.res = res; pend.rej = rej;
 	}).then((msg) => {
-		console.log(" Service should have addr...", msg);
+		//console.log(" Service should have addr...", msg);
 		const idx = l.pending.findIndex(p => p === pend);
 		if (idx >= 0) l.pending.splice(idx, 1);
 		else console.log("Failed to find pending request.");
@@ -102,8 +106,7 @@ ws.request = function (domain, service) {
 
 ws.processMessage = function (ws, msg) {
 	//console.log("socket gets a turn?", msg);
-	if (msg.op === "login") {
-		//console.log( "something:", msg );
+	if( msg.op === "resume"){
 		let pend = null;
 		for( let p = 0; p < l.pending.length; p++ ) {
 			pend = l.pending[p];
@@ -112,9 +115,32 @@ ws.processMessage = function (ws, msg) {
 				break;
 			}
 		}
-		if (msg.success)
+		if( !pend ) {
+			console.log( "Failed to find pending for :", msg );
+			return;
+		}
+		if (msg.success) {
+			pend.res();
+		} else 
+			pend.rej();
+		return true;
+	} else if (msg.op === "login") {
+		//console.log( "login message received:", msg );
+		let pend = null;
+		for( let p = 0; p < l.pending.length; p++ ) {
+			pend = l.pending[p];
+			if( l.pending[p].id === msg.id ) {
+				l.pending.splice(p,1);
+				break;
+			}
+		}
+		if( !pend ) {
+			console.log( "Failed to find pending for :", msg );
+			return;
+		}
+		if (msg.success) {
 			pend.res();//Alert(" Login Success" );
-		else if (msg.ban) {
+		} else if (msg.ban) {
 			pend.rej( "Bannable Offense");
 			Alert("Bannable Offense");
 			localStorage.removeItem("sack/udb/clientId"); // reset this
@@ -122,11 +148,11 @@ ws.processMessage = function (ws, msg) {
 		} else if (msg.device) {
 			//temporary failure, this device was unidentified, or someone elses
 			ws.send(JSON.stringify({ op: "device", deviceId: SaltyRNG.Id() }));
-			return true;
 		} else {
 			pend.rej( "Login Failed");
 			Alert("Login Failed...");
 		}
+		return true;
 	} else if (msg.op === "create") {
 		let pend = null;
 		for( let p = 0; p < l.pending.length; p++ ) {
@@ -155,6 +181,7 @@ ws.processMessage = function (ws, msg) {
 			pend.rej( "Login Failed" );
 			Alert("Login Failed...");
 		}
+		return true;
 
 	} else if (msg.op === "set") {
 		localStorage.setItem( "sack/udb/"+ msg.value, msg.key);
@@ -172,25 +199,30 @@ ws.processMessage = function (ws, msg) {
 			;//Alert(" Login Success" );
 		} else
 			Alert("Login Failed...");
+		return true;
 	} else if (msg.op === "expect") {
 		ws.on( "expect", msg );
+		return true;
 	} else if (msg.op === "device") {
 		console.log( "Device specified is inactive - too many devices?" );
 		ws.on( "deviceInactive", msg );
+		return true;
 	} else if (msg.op === "pickSash") {
 		// this is actually a client event.
+		return true;
 	} else if (msg.op === "request") {
 		// reply from server
 		for (let pend of l.pending) {
 			if (pend.id === msg.id) {
 				if (msg.ok) {
-					console.log("Got resolved service:", msg, msg.svc);
+					//console.log("Got resolved service:", msg, msg.svc);
 					pend.res({ svc: msg.svc, name: msg.name }); // return my user name also... (account login doesn't know)
 				} else {
 					if (msg.probe) Alert("Probe for services detected");
 				}
 			}
 		}
+		return true;
 	} else {
 		console.log( "Server sent unhandled message:", msg );
 	}

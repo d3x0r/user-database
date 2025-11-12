@@ -306,7 +306,7 @@ export class UserServer extends Protocol {
 				console.log( "Using message to look up expected user", msg_, user );
 				if( !user ) {
 					ws.send( JSOX.stringify( {op:"badIdentification"}));
-					ws.close( );
+					ws.close( 3002, "Bad Identification" );
 					return;
 				}else
 					l.expect.delete( msg_ );
@@ -341,7 +341,7 @@ export class UserServer extends Protocol {
 				user = l.expect.get( msg_ );
 				if( !user ) {
 					ws.send( JSOX.stringify( {op:"badIdentification"}));
-					ws.close( );
+					ws.close( 3003, "Bad Identification" );
 					return;
 				}else
 					l.expect.delete( msg_ );
@@ -388,10 +388,7 @@ export class UserServer extends Protocol {
 				//ws.send( methodMsg );
 			} else if( msg.op === "expect" ) {
 				// user connection expected on this connection...
-				console.log( "Authorize sent - now e need to send back UID and IP", msg)				
 				UserDb.grant( msg.id, msg.key, msg.addr );
-				//ws.send( JSOX.stringify( { op:"authorize", id:msg.id, addr:msg.addr } ) );
-
 			} else {
 				console.log( "unhandled client admin/profile message:", msg_ );
 			}
@@ -488,7 +485,7 @@ export class UserServer extends Protocol {
 				// happens changing working directory from one place to another.
 				isClient = await UserDb.makeIdentifier( msg.clientId );
 				//console.log( "didn't know the client... creating anyway", msg.clientId, msg );
-				//ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
+				//ws.send( JSON.stringify( { op:"login", success: false, ban: true, id:msg.id } ) );
 				//return;
 			}
 
@@ -498,7 +495,7 @@ export class UserServer extends Protocol {
 		// 👻 or 😊 
 		if( msg.user.includes( "\u{FEFF}" ) ) {
 			console.log( "Includes bad character" );
-			ws.send( JSON.stringify( { op:"guest", success: false, name:true } ));
+			ws.send( JSON.stringify( { op:"guest", success: false, name:true, id:msg.id } ));
 			return;
 		}
 		//msg.deviceId = setKey( msg.deviceId,ws,"deviceId" );
@@ -514,7 +511,7 @@ export class UserServer extends Protocol {
 
 			//console.log( "User is set in the client's ws.state (but not the services..." );
 			ws.state.user= user;
-			ws.send( JSON.stringify( { op:"guest", success: true } ));
+			ws.send( JSON.stringify( { op:"guest", success: true, id:msg.id } ));
 			{
 				const key = sack.Id();
 				UserDb.saveContinue( user, key );
@@ -524,29 +521,27 @@ export class UserServer extends Protocol {
 		}
 		//console.log( "sending false" );
 		//console.log( "guest password failure" );
-		ws.send( JSON.stringify( { op:"guest", success: false } ));
+		ws.send( JSON.stringify( { op:"guest", success: false, id:msg.id } ));
 	}
 
 	async function resume( ws, msg ){
-		const user = await UserDb.resume( msg.id );
+		const user = await UserDb.resume( msg.uid );
 		if( user ) {
 			// they had the resume key, so password/email/etc are them... 
 			ws.state.user = user;
 
 			// login could be replayed instead?
-			//ws.state.login = msg;
-			if( user.guest )
-				ws.send( JSON.stringify( { op:"guest", success: true } ));
-			else
-				ws.send( JSON.stringify( { op:"login", success: true } ));
-
+			ws.send( JSON.stringify( { op:"resume", guest:user.guest, success: true, id:msg.id } ));
 			{
 				const key = sack.Id();
 				UserDb.saveContinue( user, key );
 				ws.send( JSON.stringify( {op:"set", value:"resume", key }));
 			}
 		}
-		else console.log( "Resume ID didn't match a user?", msg );
+		else {
+			console.log( "Resume ID didn't match a user?", msg );
+			ws.send( JSON.stringify( { op:"resume", success: false, id:msg.id } ));
+		}
 	}
 
 	async function doLogin( ws, msg, google ){
@@ -555,15 +550,15 @@ export class UserServer extends Protocol {
 			// just need SOME clientID.
 			if( !isClient ) {
 				console.log( "Login could not find the client by identifer:", msg );
-				ws.send( JSON.stringify( { op:"login", success: false, ban: true } ) );
+				ws.send( JSON.stringify( { op:"login", success: false, ban: true, id:msg.id } ) );
 				return;
 			}
 			//console.log( "login:", msg );
 			//console.log( "client:", isClient );
 		}
-		console.log( 'waiting for a user forever?')
+		//console.log( 'waiting for a user forever?')
 		const user = await UserDb.getUser( msg.account );
-		console.log( "user:", google, user );
+		//console.log( "user:", google, user );
 		let externalCheckOk = false;
 		if( google ) {
 			const reply = await new Promise( (resolve,rej)=>{		
@@ -608,7 +603,7 @@ export class UserServer extends Protocol {
 		//console.log( "user:", user, msg.password );
 		if( !externalCheckOk && ( !user || user.pass !== msg.password ) ) {
 			console.log( "No User or Bad password");
-			ws.send( JSON.stringify( { op:"login", success: false } ) );
+			ws.send( JSON.stringify( { op:"login", success: false, id:msg.id } ) );
 			return;
 		}
 		
@@ -622,18 +617,18 @@ export class UserServer extends Protocol {
 				ws.state.login = msg;
 				// ask the device to add a device.
 				console.log( "Bad device");
-				ws.send( JSON.stringify( {op:"login", success:false, device:true } ) );
+				ws.send( JSON.stringify( {op:"login", success:false, device:true, id:msg.id } ) );
 				return;
 			}
 			if( !dev.active ) {
 				console.log( "inacive state");
-				ws.send( JSON.stringify( {op:"login", success:false, inactive:true } ) );
+				ws.send( JSON.stringify( {op:"login", success:false, inactive:true, id:msg.id } ) );
 				return;
 			}
 		}
 		//console.log( "sending false" );
 		//console.log( "Otherwise I guess it's true?" );
-		ws.send( JSON.stringify( { op:"login", success: true } ));
+		ws.send( JSON.stringify( { op:"login", success: true, id:msg.id } ));
 		if( enable_reconnect ) {
 			const key = sack.Id();
 			UserDb.saveContinue( user, key, msg.deviceId );
@@ -652,7 +647,7 @@ export class UserServer extends Protocol {
 	async function doCreate( ws, msg ) {
 		if( !validateUsername( msg.user ) ) {
 			console.log( "bad create username");
-			ws.send( JSON.stringify( { op:"create", success: false, name:true } ) );
+			ws.send( JSON.stringify( { op:"create", success: false, name:true, id:msg.id } ) );
 			return;
 		}
 
@@ -660,14 +655,14 @@ export class UserServer extends Protocol {
 		const validEMail = true;//await checkEmail( msg.email );
 		if( false && !validEMail ) {
 			console.log( "bad create email");
-			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
+			ws.send( JSON.stringify( { op:"create", success: false, email:true, id:msg.id } ) );
 			return;
 		}
 		if( track_unique_identifiers ) {
 			const unique = await UserDb.getIdentifier( msg.clientId );//new UniqueIdentifier();
 			if( !unique ) {                              
 				//console.log( "Resulting with a reset of client ID." );
-				ws.send( JSON.stringify( { op:"create", success: false, ban: true } ) );
+				ws.send( JSON.stringify( { op:"create", success: false, ban: true, id:msg.id } ) );
 				return;
 			}
 		}
@@ -675,14 +670,14 @@ export class UserServer extends Protocol {
 		const oldUser = await UserDb.User.get( msg.account );
 		if( oldUser ) {
 			console.log( "user Account exists");
-			ws.send( JSON.stringify( { op:"create", success: false, account:true } ) );
+			ws.send( JSON.stringify( { op:"create", success: false, account:true, id:msg.id } ) );
 			return;
 		}
 
 		const oldUser2 = msg.email && (await UserDb.User.getEmail( msg.email ));
 		if( oldUser2 ) {                 
 			console.log( "create user email exists");
-			ws.send( JSON.stringify( { op:"create", success: false, email:true } ) );
+			ws.send( JSON.stringify( { op:"create", success: false, email:true, id:msg.id } ) );
 			return;
 		}
 
@@ -692,7 +687,7 @@ export class UserServer extends Protocol {
 		ws.state.user.authorize = true;
 		// Looks like this should have passed all setup conditions and got created?
 		console.log( "Success creating user." );
-		ws.send( JSON.stringify( {op:"create", success:true } ) );
+		ws.send( JSON.stringify( {op:"create", success:true, id:msg.id } ) );
 	}
 
 	async function addDevice(ws,msg) {
@@ -763,14 +758,11 @@ export class UserServer extends Protocol {
 			console.log( "otherwise find the service (post reg)", msg );
 			// msg has addr:[], iaddr:[], loc:(uid), sid:false, op:register
 			//       , svc:{badges,description,domain,or,service}
-			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>{
-				console.log( "Ahh Hah, finall, having registered my service, I connect this socket", s, ws );
-				return s.addInstance( ws );
-			} );
+			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>s.addInstance( ws ) );
 			if( svcInst ) {
 				// register service finally gets a result... and sends my response.
 				console.log( "Service resulted, and is an instance?", svcInst );
-				//ws.send( JSOX.stringify( { op:"register", ok:true, sid: svc.sid } ) );
+				ws.send( JSOX.stringify( { op:"register", ok:true, sid: svcInst.sid } ) );
 			}else {
 				console.log( "service will always exist or this wouldn't run.");
 			}
@@ -784,6 +776,7 @@ export class UserServer extends Protocol {
 		debug_ && console.log( "Calling requestservice", ws.state );
 		//console.log( "So this request should have a user..." );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
+		//console.log( "is there an instance?", inst );
 		if( inst ) {
 			//console.log( "Service result:", inst, "for", msg );
 			inst.authorize( msg.id, ws.state.user ).then( ( expect )=>{
@@ -793,9 +786,10 @@ export class UserServer extends Protocol {
 		} else {
 			if( ws.state.forGuest )
 				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, noUsers:true } ) );
-			else				
+			else {
 			//console.log( "Sending reply to client that we don't have a service yet?" );
 				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, probe:true } ) );
+			}
 		}
 	}
 
