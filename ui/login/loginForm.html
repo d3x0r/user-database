@@ -108,13 +108,13 @@
 	{ // context to keep private functions private...
 		const buttonContainerSignIn = parent.querySelector( "#google-button-sign-in" );
 		const buttonContainerSignUp = parent.querySelector( "#google-button-sign-up" );
-		window.google.accounts.id.setLogLevel( "debug" );
+		//window.google.accounts.id.setLogLevel( "debug" );
 		window.google.accounts.id.initialize({
 			client_id: '710795352839-q4n1q1ckih9erp8g3qfnifplc6o5mmre.apps.googleusercontent.com',
 			callback: handleCredentialResponse,
 			prompt_parent: parent,
 			use_fedcm_for_prompt: true,
-			auto_select : false,
+			auto_select : true,
 			hd: "*", // hosted domain - comes back in JWT
 			//login_uri: "https://app.d3x0r.org:8399/gsi",
 			//prompt_parent_id: parent,
@@ -152,7 +152,7 @@
 
 		}
 		function handleCredentialResponse( res ) {
-			console.log( "response of init?", res );
+			//console.log( "response of init?", res );
 			if( "credential" in res ) {
 				//{clientId:"710795352839-q4n1q1ckih9erp8g3qfnifplc6o5mmre.apps.googleusercontent.com"
 				//,client_id:"710795352839-q4n1q1ckih9erp8g3qfnifplc6o5mmre.apps.googleusercontent.com"
@@ -167,11 +167,13 @@ If you specified a hd parameter value in the request, verify that the ID token h
 */
 
 				const jwt = parseJwt( res.credential );
-				console.log( "JSON?", jwt );
+				//console.log( "JSON?", jwt );
+				// this should just be a success basically by definition (barring banning/blocking/etc.)
+				// why doesn't the normal event just work?
 				if( !signin )
-					connection.ws.doCreate(jwt.name, jwt.email, jwt.sub, jwt.email, res.credential, jwt );
+					connection.ws.doCreate(jwt.name, jwt.email, jwt.sub, jwt.email, res.credential, jwt )
 				else
-					connection.ws.doLogin(jwt.email, jwt.sub, res.credential, jwt);
+					connection.ws.doLogin(jwt.email, jwt.sub, res.credential, jwt)
 			}
 		}
 		function parseJwt (token) {

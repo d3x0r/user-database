@@ -558,7 +558,7 @@ export class UserServer extends Protocol {
 		}
 		//console.log( 'waiting for a user forever?')
 		const user = await UserDb.getUser( msg.account );
-		//console.log( "user:", google, user );
+		console.log( "user:", google, user );
 		let externalCheckOk = false;
 		if( google ) {
 			const reply = await new Promise( (resolve,rej)=>{		
@@ -570,12 +570,13 @@ export class UserServer extends Protocol {
 						// Or, if multiple clients access the backend:
 						//[WEB_CLIENT_ID_1, WEB_CLIENT_ID_2, WEB_CLIENT_ID_3]
 					}).then( ticket=>{
-						
+						//ticket.name (display name)
+						//ticket.email (account name/email register)
 						const payload = ticket.getPayload();
 						const userid = payload['sub'];
 						// If the request specified a Google Workspace domain:
 						// const domain = payload['hd'];
-						//console.log( "Guess userid is sub?", ticket, userid, msg.jwt.sub)
+						console.log( "Guess userid is sub?", ticket, userid, msg.jwt)
 						if( payload.sub == msg.jwt.sub ) {
 							externalCheckOk = true;
 							return true;
@@ -627,7 +628,7 @@ export class UserServer extends Protocol {
 			}
 		}
 		//console.log( "sending false" );
-		//console.log( "Otherwise I guess it's true?" );
+		console.log( "Otherwise I guess it's true?" );
 		ws.send( JSON.stringify( { op:"login", success: true, id:msg.id } ));
 		if( enable_reconnect ) {
 			const key = sack.Id();

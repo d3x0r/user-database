@@ -290,20 +290,27 @@ function processMessage(ws,msg_) {
 			l.connected = true;
 			l.ws = ws;
 			l.ws.on("close", (code,reason)=>{
+			// if( code === 1000 ) { /* okay, we're connected, no longer need login connection */ }
 				console.log( "Connection ended... ", code, reason ); 
-				console.log( "Suppose we still need to connect?" );
+				//console.log( "Suppose we still need to connect?" );
 				l.on( "close", [code,reason] );
 
 			})
 			if (l.loginForm) l.loginForm.connect();
 			// result should trigger normal events in login form to close.
 			p.then( ()=>{
-				ws.resume();
+				return ws.resume().catch( (err)=>{
+					console.log( "login resume failed...", err );
+				});
+			}).catch( (err)=>{
+				console.log( "login resume failed...", err );
 			});
 		} catch (err) {
 			console.log("Function compilation error:", err, "\n", msg.code);
 		}
 	}
+
+	/* most of the following do not get called, and end up getting handled by the method handler added above*/
 	else if (msg.op === "login") {
 		if (msg.success) {
 			//Alert(" Login Success" );
@@ -342,7 +349,6 @@ function processMessage(ws,msg_) {
 		} else {
 			Alert("Creation Failed...");
 		}
-
 	}
 	else if (msg.op === "pickSash") {
 		// this is actually a client event.

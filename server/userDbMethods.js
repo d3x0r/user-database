@@ -40,7 +40,10 @@ ws.doLogin = function (user, pass,cred,jwt) {
 		ws.send(`{op:login,id:${p.id},account:${JSON.stringify(user)},password:${JSON.stringify(pass)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
 	        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
                         ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
-	} );
+	} ).then( ( arg )=>{
+		//console.log( "login result is?", arg );
+		connector.on( "login", arg )
+	});
 
 }
 ws.doCreate = function (display, user, pass, email, cred,jwt ) {
@@ -54,7 +57,14 @@ ws.doCreate = function (display, user, pass, email, cred,jwt ) {
             		,user:display,email:email, cred,jwt
         		,clientId:localStorage.getItem("sack/udb/clientId")
                         ,deviceId:localStorage.getItem("sack/udb/deviceId") }));
-	} );
+	} ).then( ( arg )=>{
+		console.log( "login result is?", arg );
+		connector.on( "create", arg )
+	}).catch ((reason)=>{
+		if( reason === "Account exists...") {
+			return ws.doLogin( user, pass, cred, jwt );
+		}
+	});
 }
 ws.doGuest = function (user,cred,jwt) {
 	//ws.send(
@@ -64,7 +74,10 @@ ws.doGuest = function (user,cred,jwt) {
 		ws.send(`{op:guest,id:${p.id},user:${JSON.stringify(user)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
    	     		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
 	                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
-	} );
+	} ).then( ( arg )=>{
+		//console.log( "login result is?", arg );
+		connector.on( "guest", arg )
+	});
 }
 
 ws.getService = function (domain, service) {
@@ -177,6 +190,9 @@ ws.processMessage = function (ws, msg) {
 			localStorage.setItem("sack/udb/deviceId", newId);
 			ws.send(JSON.stringify({ op: "device", deviceId: newId }));
 			return true;
+		} else if (msg.account) {
+			pend.rej( "Account exists..." );
+			Alert("Account Exists...");
 		} else {
 			pend.rej( "Login Failed" );
 			Alert("Login Failed...");
