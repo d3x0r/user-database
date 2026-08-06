@@ -11,7 +11,8 @@
 const here = new URL(import.meta.url);
 //console.log( "Origin? Meta?", location, import.meta, here );
 
-import { popups, AlertForm } from "/node_modules/@d3x0r/popups/popups.mjs"
+import { popups } from "/node_modules/@d3x0r/popups2/popups.js"
+import { AlertForm } from "/node_modules/@d3x0r/popups2/forms/alert.js"
 import { JSOX } from "/node_modules/jsox/lib/jsox.mjs"
 //console.log( "location:", location, import.meta );
 
@@ -214,7 +215,8 @@ const l = {
 				}
 			}
 			else {
-				if( !passField.value || !nameField2.value || !userField2.value || !emailField2.value ) {
+				if( ( (!createMode) && (!passField.value || !userField.value) ) 
+					|| ( (createMode) && ( !passField2.value || !nameField2.value || !userField2.value || !emailField2.value ) ) ) {
 					if (!alertForm) alertForm = new AlertForm();
 					alertForm.caption = "Form not filled.  Blank fields are not allowed.";
 					alertForm.show();
