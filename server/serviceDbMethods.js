@@ -7,7 +7,7 @@ const _debug_location = false;
 //console.log( "Extend this websocket:", this );
 //console.log( "Service extension:", process.cwd() );
 
-const serviceConfig = (await Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox")).default;
+const serviceConfig = (await (Import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.service.jsox").catch((err)=>{return {default:{addresses:[],interfaces:[], internal_addresses:[],internal_interfaces:[]}}}))).default;
 const configPath = opts.configPath || "";
 
 const os = await Import( "os" );
@@ -18,16 +18,42 @@ const JSOX = sack.JSOX;
 const disk = sack.Volume();
 // my path is poorly defined here...
 const srvc = disk.exists( configPath + "service.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( configPath + "service.jsox" ) );
-if( srvc ) srvc.badges = srvc && disk.exists( configPath + "badges.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( configPath + "badges.jsox" ) );
+if( srvc ) srvc.badges = srvc && disk.exists( configPath + "service.badges.jsox" ) && sack.JSOX.parse( sack.Volume.readAsString( configPath + "service.badges.jsox" ) );
 let mySID = srvc.badges 
 		&& ( ( disk.exists( configPath + "fs/mySid.jsox" ) && sack.Volume.readAsString( configPath + "fs/mySid.jsox" ) )
 		   || ( disk.exists( configPath + "mySid.jsox" ) && sack.Volume.readAsString( configPath + "mySid.jsox" ) ) );
 
 if( !srvc ) {
-	console.log( "Service definition not found..." );
+	console.log( "Service definition not found... (service.jsox)" );
+console.log( 
+`// This file describes the organization and application
+// names are used to register services provided with login.
+
+{
+	org : "Freedom Collective",
+	domain : "d3x0r.org",
+	service : "login",
+	description : "User Login Service",
+}
+` );
+
+
 }
 else if( !srvc.badges ) {
-	console.log( "Badge definition not found for oranization..." );
+	console.log( "Badge definition not found for oranization...(service.badges.jsox)" );
+console.log( 
+`
+{
+	edit : { name: "Edit Permissions",
+        		description: "Ability to view organizational permissions"
+        	},
+	ban : { name: "Ban User",
+        		description: "Set status on user accounts for banning"
+        	},
+	token : { name: "Ban User",
+        		description: "Set status on user accounts for banning"
+        	},
+}` );
 }
 const SaltyRNGModule = await Import( "@d3x0r/srg2" );
 const SaltyRNG = SaltyRNGModule.SaltyRNG;

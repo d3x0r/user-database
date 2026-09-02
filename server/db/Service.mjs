@@ -25,7 +25,7 @@ export class ServiceInstance {
 		return this.#service;
 	}
 	get ws() {
-		console.log( "get ws(), This.#ws isn't right?", this.#ws );
+		//console.log( "get ws(), This.#ws isn't right?", this.#ws );
 		return this.#ws;
 	}
 	set service( s ) {
@@ -43,7 +43,8 @@ export class ServiceInstance {
 			console.trace( "Chose a disconnected instance to try");
 			return;
 		}
-		console.trace( "Authorize service....", !!this.#ws, !!forUser );
+
+		//console.trace( "Authorize service....", !!this.#ws, !!forUser );
 		const inst = this;
 		//console.log( "inst:", inst, forUser );
 		//console.log( "have to send something to a instance ...., to get it to accept, and get user info" );
@@ -262,7 +263,7 @@ export class Service  extends StoredObject{
 		}else {
 			inst = new ServiceInstance( );
 			inst.service = this;
-			inst.set();
+			inst.set( inst.sid );
 			this.instances.push( inst.sid );
 		}
 
@@ -270,7 +271,7 @@ export class Service  extends StoredObject{
 			//console.log( "Onclose now removes active instances...", ws, );
 			for( let n = 0; n < this.#active_instances.length; n++ ) {
 				if( this.#active_instances[n].ws === ws ) {
-					console.log( "did find a instance to grab..", this.#free_instances );
+					//console.log( "did find a instance to grab..", this.#free_instances );
 					this.#unused_instances.push( this.#active_instances[n] );
 					this.#active_instances.splice( n, 1 );
 					break;

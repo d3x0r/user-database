@@ -1,6 +1,7 @@
 import {sack} from "sack.vfs"
 //const JSOX = sack.JSOX;
-import {UserDb,l,config_ as config,StoredObject} from "../userDb.mjs"
+import {config} from "../config.mjs"
+import {UserDb,l,StoredObject} from "../userDb.mjs"
 
 
 export class User  extends StoredObject{

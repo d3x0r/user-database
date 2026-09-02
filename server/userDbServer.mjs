@@ -10,25 +10,30 @@ const enable_reconnect = true;
 import DNS from 'dns';
 
 const colons = import.meta.url.split(':');
-const where = colons.length===2?colons[1].substr(1):colons[2];
+const where = colons.length===2?colons[1].slice(1):(colons[1].slice( 3) + ":" + colons[2]);
 const nearIdx = where.lastIndexOf( "/" );
 const nearPath = where.substr(0, nearIdx );
-console.log( "nearpath is parent?", nearPath )
 //console.log( "environment:", process.env );
 
 import path from "path";
 import {sack} from "sack.vfs"
+const disk = sack.Volume();
 import {ObjectStorage} from "sack.vfs/object-storage"
 import {getRequestHandler} from "sack.vfs/apps/http-ws";
 import {Protocol} from "sack.vfs/protocol";
-import { OAuth2Client} from "google-auth-library";
+const  { OAuth2Client} = (await import( "google-auth-library" ).catch( ()=>({ OAuth2Client: null })) );
 import {checkEmail} from "./emailValidator.mjs"
-const client = new OAuth2Client();
+const client = OAuth2Client?new OAuth2Client():null;
 
-const nativeDisk = sack.Volume();
-const config = (await import( ((process.platform=="win32")?"file://":"")+process.cwd()+"/config.jsox" )).default;
+import {enableLogin} from "@d3x0r/user-database-remote/enableLogin.mjs";
+
+
+import {config} from "./config.mjs";
+
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 const withLoader = true;//process.env.SELF_LOADED;
+const resourcePath = [process.env.RESOURCE_PATH, (nearPath + "/../ui")];
+const npmPath = [process.env.NPM_PATH, (nearPath+"/..")];
 // make sure we load the import script
 
 const JSOX = sack.JSOX;
@@ -38,6 +43,10 @@ const storageDb = sack.DB( process.env.DSN || config.dsn || "maria-udb");
 
 const storage = new ObjectStorage( storageDb );//( "fs/data.os" );
 UserDb.hook( storage );
+
+const clientConfig = {
+	google: !!client
+};
 
 function read( name ) {
         try {
@@ -49,13 +58,13 @@ function read( name ) {
         }
 }
 
-const methods = sack.Volume().read( nearPath+"/userDbMethods.js" ).toString();
-const methodMsg = JSON.stringify( {op:"addMethod", code:methods} );
+const methods = disk.read( nearPath+"/userDbMethods.js" ).toString();
+const methodMsg = JSON.stringify( {op:"addMethod", code:methods, config:clientConfig} );
 
-const serviceMethods = sack.Volume().read( nearPath+"/serviceDbMethods.js" ).toString();
+const serviceMethods = disk.read( nearPath+"/serviceDbMethods.js" ).toString();
 const serviceMethodMsg = JSON.stringify( {op:"addMethod", code:serviceMethods} );
 
-const serviceLoginScript = sack.Volume().read( nearPath+"/serviceLogin.mjs" ).toString();
+const serviceLoginScript = disk.read( nearPath+"/serviceLogin.mjs" ).toString();
 
 import {UserDbRemote} from "./serviceLogin.mjs";
 
@@ -75,10 +84,10 @@ const certChain = read( getCertChain() );
 const certKey = read( getCertKey() );
 
 
-console.log( "getting request handler?" );
+console.log( "getting request handler?", process.env.RESOURCE_PATH || (nearPath + "/../ui")  );
 export const loginRequest = getRequestHandler(	{ 
-		resourcePath: nearPath + "/../ui" ,
-		npmPath: nearPath+"../"
+		resourcePath,
+		npmPath
 		} );
  
 //import {UserDbServer} from "./userDbLoginService.mjs";
@@ -112,16 +121,16 @@ const resourcePerms = {
 if( withLoader ) go.then( ()=>{
 	const port = Number(process.env.LOGIN_PORT) || Number(process.env.PORT) || Number(process.argv[2])||8600 ;
 	const serverOpts = { port ,
-		resourcePath: nearPath + "/../ui" ,
-		npmPath: nearPath + "/..",
+		resourcePath,
+		npmPath,
                 cert : certChain,
                 key : certKey
 		};
 	//console.log( "serving from?", serverOpts );
 	if( config.certPath ) Object.assign( serverOpts, { 
-				 cert :nativeDisk.read( config.certPath + "/cert.pem" ).toString()
-				, key : nativeDisk.read( config.certPath + "/privkey.pem" ).toString()
-				, ca : nativeDisk.read( config.certPath + "/fullchain.pem" ).toString()
+				 cert :disk.read( config.certPath + "/cert.pem" ).toString()
+				, key : disk.read( config.certPath + "/privkey.pem" ).toString()
+				, ca : disk.read( config.certPath + "/fullchain.pem" ).toString()
 			} );
 
        openLoginServer( 		serverOpts );
@@ -151,23 +160,31 @@ function serviceRequestFilter( req, res ) {
 	console.log( "userDbServer req filter:", req.url );
 	if( req.url == "/serviceLogin.mjs" ) {
 		let filePath = nearPath + "/../ui"+ req.url;
-		if( nativeDisk.isDir( filePath ) ) filePath += "/index.html"; 
-		if( nativeDisk.exists( filePath ) ) {
+		if( disk.isDir( filePath ) ) filePath += "/index.html"; 
+		if( disk.exists( filePath ) ) {
 			const headers = { 'Content-Type': "text/javascript", 'Access-Control-Allow-Origin' : req.connection.headers.Origin };
 			//if( contentEncoding ) headers['Content-Encoding']=contentEncoding;
 			res.writeHead(200, headers );
-			res.end( nativeDisk.read( filePath ) );
+			res.end( disk.read( filePath ) );
 console.log( "--- write head --- " );
 			return true;
 		}
 	}
 }
 
-
+function expectRequest( msg ) {
+	const id = sack.Id();
+	console.log( "Expect request from user:", msg );
+	connections.set( id, msg );
+	return id;
+}
 
 function openLoginServer( opts, cb )
 {
 	const server = new UserServer( opts );
+
+	enableLogin( server.server, server.server.app, expectRequest );
+
 	console.log( "login serving on " + opts.port );
 	// this connects my own service to me...
 	// do I need this?
@@ -379,7 +396,7 @@ export class UserServer extends Protocol {
 		}
 
 		function handleService( ws, msg_ ) {
-			//console.log( "MSG:", msg_ );
+			console.log( "MSG:", msg_ );
 			const msg = JSOX.parse( msg_ );
 			//console.log( 'userLocal message:', msg );
 			if( msg.op === "register" ) {
@@ -396,6 +413,7 @@ export class UserServer extends Protocol {
 
 		function handleClient( ws, msg_ ) {
 			ws = MyWS;
+			console.log( "MSG:", msg_ );
 			const msg = JSOX.parse( msg_ );
 			debug_messages_ && console.trace( 'UserDbServer message:', msg );
 			try {
@@ -452,7 +470,7 @@ export class UserServer extends Protocol {
 		// the login service will tell the client this response... 
 	}
 	
-	//console.table( nativeDisk.dir() );
+	//console.table( disk.dir() );
 
 	class ServiceConnection {
 		serviceId = sack.Id();
@@ -560,7 +578,7 @@ export class UserServer extends Protocol {
 		const user = await UserDb.getUser( msg.account );
 		console.log( "user:", google, user );
 		let externalCheckOk = false;
-		if( google ) {
+		if( client && google ) {
 			const reply = await new Promise( (resolve,rej)=>{		
 
 				async function verify() {
@@ -777,7 +795,7 @@ export class UserServer extends Protocol {
 		debug_ && console.log( "Calling requestservice", ws.state );
 		//console.log( "So this request should have a user..." );
 		const inst = await UserDb.requestService( msg.domain, msg.service, ws.state.user );
-		//console.log( "is there an instance?", inst );
+		console.log( "is there an instance? (after promise)", inst );
 		if( inst ) {
 			//console.log( "Service result:", inst, "for", msg );
 			inst.authorize( msg.id, ws.state.user ).then( ( expect )=>{
@@ -788,7 +806,7 @@ export class UserServer extends Protocol {
 			if( ws.state.forGuest )
 				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, noUsers:true } ) );
 			else {
-			//console.log( "Sending reply to client that we don't have a service yet?" );
+				console.log( "Sending reply to client that we don't have a service yet?" );
 				ws.send( JSOX.stringify( {op:"request", id:msg.id, ok:false, probe:true } ) );
 			}
 		}
@@ -800,3 +818,7 @@ export class UserServer extends Protocol {
 	}
 
 
+
+if( "enableExitSignal" in sack.system ) {
+	sack.system.enableExitSignal( process.exit.bind(process,0) );
+}

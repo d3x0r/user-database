@@ -18,105 +18,13 @@ const l = {
 	pending: []
 }
 
-ws.resume = function () {
+ws.getProfile = function () {
 	return new Promise( (res,rej)=>{
-		const key = localStorage.getItem( "sack/udb/resume" );
-		if( key ) {
+		//const key = localStorage.getItem( "sack/udb/resume" );
 			const p = {res,rej,id:SaltyRNG.Id()};
 			l.pending.push( p );
 			ws.send(`{op:resume,id:${JSON.stringify(p.id)},uid:${JSON.stringify(key)}}`);
-		}
-		else
-			rej();
-	} ).then( (arg)=>{
-		connector.on( "login", arg )
 	} );
-}
-
-ws.doLogin = function (user, pass,cred,jwt) {
-	//ws.send(
-	return new Promise( (res,rej)=>{
-		pass = SaltyRNG.id(pass);
-		const p = {res,rej,id:SaltyRNG.Id()};
-		l.pending.push( p );
-		ws.send(`{op:login,id:${JSON.stringify(p.id)},account:${JSON.stringify(user)},password:${JSON.stringify(pass)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
-	        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
-	} ).then( ( arg )=>{
-		//console.log( "login result is?", arg );
-		connector.on( "login", arg )
-	});
-
-}
-ws.doCreate = function (display, user, pass, email, cred,jwt ) {
-	//ws.send(
-	return new Promise( (res,rej)=>{
-		pass = SaltyRNG.id(pass);
-		email = SaltyRNG.id(email);
-		const p = {res,rej,id:SaltyRNG.Id()};
-		l.pending.push( p );
-		ws.send(JSON.stringify( {op:"create",id:p.id,account:user,password:pass
-            		,user:display,email:email, cred,jwt
-        		,clientId:localStorage.getItem("sack/udb/clientId")
-                        ,deviceId:localStorage.getItem("sack/udb/deviceId") }));
-	} ).then( ( arg )=>{
-		console.log( "login result is?", arg );
-		connector.on( "create", arg )
-	}).catch ((reason)=>{
-		if( reason === "Account exists...") {
-			return ws.doLogin( user, pass, cred, jwt );
-		}
-	});
-}
-ws.doGuest = function (user,cred,jwt) {
-	//ws.send(
-	return new Promise( (res,rej)=>{
-		const p = {res,rej,id:SaltyRNG.Id()};
-		l.pending.push( p );
-		ws.send(`{op:guest,id:${JSON.stringify(p.id)},user:${JSON.stringify(user)}${jwt?(",jwt:"+JSON.stringify(jwt)):""}${cred?(",cred:"+JSON.stringify(cred)):""}${(cred&&jwt)?",google:true":""}
-   	     		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
-	                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
-	} ).then( ( arg )=>{
-		//console.log( "login result is?", arg );
-		connector.on( "guest", arg )
-	});
-}
-
-ws.getService = function (domain, service) {
-	//ws.send(
-	return new Promise( (res,rej)=>{
-		pass = SaltyRNG.id(pass);
-		const p = {res,rej,id:SaltyRNG.Id()};
-		l.pending.push( p );
-		ws.send(`{op:"service",id:${JSON.stringify(p.id)},domain:${JSON.stringify(domain)},service:${JSON.stringify(service)}}`);
-	} );
-}
-
-
-const sesKey = localStorage.getItem("seskey");
-if (sesKey) {
-	// auto reconnect
-	ws.send(`{op:"Login",seskey:${JSON.stringify(sesKey)}
-        		,clientId:${JSON.stringify(localStorage.getItem("sack/udb/clientId"))}
-                        ,deviceId:${JSON.stringify(localStorage.getItem("sack/udb/deviceId"))} }`);
-
-}
-
-ws.request = function (domain, service) {
-	// like getService?  
-	const p = { op: "request", id: SaltyRNG.Id(), p: null, domain: domain, service: service, res: null, rej: null };
-	ws.send(`{op:"request",id:${JSON.stringify(p.id)},domain:${JSON.stringify(domain)},service:${JSON.stringify(service)}}`);
-	p.p = new Promise((res, rej) => {
-		p.res = res; p.rej = rej;
-	}).then((msg) => {
-		//console.log(" Service should have addr...", msg);
-		const idx = l.pending.findIndex(pend => pend === p);
-		if (idx >= 0) l.pending.splice(idx, 1);
-		else console.log("Failed to find pending request.");
-		return msg;
-	})
-	l.pending.push(p);
-	return p.p;
 }
 
 ws.processMessage = function (ws, msg) {

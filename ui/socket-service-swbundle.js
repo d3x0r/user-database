@@ -12,13 +12,18 @@
 //import util from 'util'; 
 
 const _JSON=JSON; // in case someone does something like JSON=JSOX; we still need a primitive _JSON for internal stringification
+//if( "undefined" === typeof exports )
+//	var exports = {};
+
+/**
+ * JSOX container for all JSOX methods.
+ * @namespace
+ */
 const JSOX = {};
-//const JSOX = exports;
-//exports.JSOX = JSOX;
+//const JSOX = (function ( JSOX ) {
+JSOX.JSOX = JSOX;
+JSOX.version = "1.2.125";
 
-JSOX.version = "1.2.120";
-
-//function privateizeEverything() {
 //const _DEBUG_LL = false;
 //const _DEBUG_PARSING = false;
 //const _DEBUG_STRINGIFY = false;
@@ -104,9 +109,12 @@ const CONTEXT_CLASS_VALUE = 5;
 const CONTEXT_CLASS_FIELD_VALUE = 6;
 const keywords = {	["true"]:true,["false"]:false,["null"]:null,["NaN"]:NaN,["Infinity"]:Infinity,["undefined"]:undefined };
 
-/*
-Extend Date type with a nanosecond field.
-*/
+/**
+ * Extend Date type with a nanosecond field.
+ * @constructor
+ * @param {Date} original_date
+ * @param {Number} nanoseconds in milli-seconds of Date ( 0 to 1_000_000 )
+ */
 class DateNS extends Date {
 	constructor(a,b ) {
 		super(a);
@@ -117,6 +125,10 @@ class DateNS extends Date {
 JSOX.DateNS = DateNS;
 
 const contexts = [];
+/**
+ * get a context from stack (reuse contexts)
+ * @internal
+ */
 function getContext() {
 	let ctx = contexts.pop();
 	if( !ctx )
@@ -130,15 +142,31 @@ function getContext() {
 		      };
 	return ctx;
 }
+/**
+ * return a context to the stack (reuse contexts)
+ * @internal
+ */
 function dropContext(ctx) { 
 	contexts.push( ctx ); 
 }
+
+/**
+ * SACK jsox compatibility; hands maps to internal C++ code in other case.
+ * @internal
+ */
+JSOX.updateContext = function() {
+    //if( toProtoTypes.get( Map.prototype ) ) return;
+    //console.log( "Do init protoypes for new context objects..." );
+    //initPrototypes();
+};
 
 const buffers = [];
 function getBuffer() { let buf = buffers.pop(); if( !buf ) buf = { buf:null, n:0 }; else buf.n = 0; return buf; }
 function dropBuffer(buf) { buffers.push( buf ); }
 
 /**
+ * Provide minimal escapes for a string to be encapsulated as a JSOX string in quotes.
+ *
  * @param {string} string 
  * @returns {string}
  */
@@ -161,19 +189,25 @@ let toObjectTypes = new Map();
 let fromProtoTypes = new Map();
 let commonClasses = [];
 
-JSOX.reset = resetJSOX;
-
-function resetJSOX() {
+/**
+ * reset JSOX parser entirely; clears all type mappings
+ *
+ * @returns {void}
+ */
+JSOX.reset = function() {
 	toProtoTypes = new WeakMap();
 	toObjectTypes = new Map();
 	fromProtoTypes = new Map();
 	commonClasses = [];	
-}
+};
 
 /**
- * @param {(value:any)} [cb]
- * @param {(this: unknown, key: string, value: unknown) => any} [reviver] 
- * @returns {none}
+ * Create a streaming parser.  Add data with parser.write(data); values that
+ * are found are dispatched to the callback.
+ *
+ * @param {(value:any) => void} [cb]
+ * @param {(this: any, key: string, value: any) => any} [reviver] 
+ * @returns {JSOXParser}
 */
 JSOX.begin = function( cb, reviver ) {
 
@@ -303,7 +337,7 @@ JSOX.begin = function( cb, reviver ) {
 		/**
 		 * Define a class that can be used to deserialize objects of this type.
 		 * @param {string} prototypeName 
-		 * @param {type} o 
+		 * @param {new ():any} o 
 		 * @param {(any)=>any} f 
 		 */
 		fromJSOX( prototypeName, o, f ) {
@@ -403,9 +437,10 @@ JSOX.begin = function( cb, reviver ) {
 		},
 		/**
 		 * Parse a string and return the result.
+		 * @template T
 		 * @param {string} msg
 		 * @param {(key:string,value:any)=>any} [reviver]
-		 * @returns {any}
+		 * @returns {T}
 		 */
 		parse(msg,reviver) {
 			if (typeof msg !== "string") msg = String(msg);
@@ -799,7 +834,7 @@ JSOX.begin = function( cb, reviver ) {
 					}
 
 					if( cInt == 44/*','*/ || cInt == 125/*'}'*/ || cInt == 93/*']'*/ || cInt == 58/*':'*/ )
-						throwError( "Invalid character near identifier", cInt );
+						;// just don't add these, they are the next token that caused a revive to happen
 					else //if( typeof cInt === "number")
 						val.string += str;
 				}
@@ -980,6 +1015,7 @@ JSOX.begin = function( cb, reviver ) {
 					str = buf.charAt(_n);
 					let cInt = buf.codePointAt(n++);
 					if( cInt >= 256 ) { 
+							pos.col -= n - _n;
 							n = _n; // put character back in queue to process.
 							break;
 					} else {
@@ -1072,6 +1108,7 @@ JSOX.begin = function( cb, reviver ) {
 							 || cInt == 44/*','*/ || cInt == 125/*'}'*/ || cInt == 93/*']'*/
 							 || cInt == 123/*'{'*/ || cInt == 91/*'['*/ || cInt == 34/*'"'*/ || cInt == 39/*'''*/ || cInt == 96/*'`'*/
 							 || cInt == 58/*':'*/ ) {
+								pos.col -= n - _n;
 								n = _n; // put character back in queue to process.
 								break;
 							}
@@ -1421,6 +1458,9 @@ JSOX.begin = function( cb, reviver ) {
 						continue;
 					}
 					switch( cInt ) {
+					case 35/*'#'*/:
+						comment = 2; // pretend this is the second slash.
+						break;
 					case 47/*'/'*/:
 						comment = 1;
 						break;
@@ -1568,7 +1608,11 @@ JSOX.begin = function( cb, reviver ) {
 							// first, add the last value
 							//_DEBUG_PARSING && console.log( "close object; push item '%s' %d", val.name, val.value_type );
 							if( val.value_type === VALUE_UNSET ) {
-								throwError( "Fault while parsing; unexpected", cInt );
+								if( word == WORD_POS_RESET )
+									throwError( "Fault while parsing; unexpected", cInt );
+								else {
+									recoverIdent(cInt);									
+								}
 							}
 							objectPush();
 							val.value_type = VALUE_OBJECT;
@@ -1613,6 +1657,11 @@ JSOX.begin = function( cb, reviver ) {
 								// a better sanity check would be val.name === elements.length;
 								//if( val.name ) if( val.name !== elements.length ) console.log( "Ya this should blow up" );
 								arrayPush();
+							} else {
+								if( word !== WORD_POS_RESET ) {
+									recoverIdent(cInt);
+									arrayPush();
+								}
 							}
 							val.contains = elements;
 							{
@@ -2078,6 +2127,9 @@ JSOX.begin = function( cb, reviver ) {
 
 				if( n == buf.length ) {
 					dropBuffer( input );
+					if( val.value_type == VALUE_UNSET && ( complete_at_end && word != WORD_POS_RESET ) ) {
+						recoverIdent( 32 ); // whitespace isn't appended...
+					}
 					if( gatheringString || gatheringNumber || parse_context == CONTEXT_OBJECT_FIELD ) {
 						retval = 0;
 					}
@@ -2120,9 +2172,12 @@ JSOX.begin = function( cb, reviver ) {
 const _parser = [Object.freeze( JSOX.begin() )];
 let _parse_level = 0;
 /**
+ * parse a string resulting with one value from it.
+ *
+ * @template T
  * @param {string} msg 
- * @param {(this: unknown, key: string, value: unknown) => any} [reviver] 
- * @returns {unknown}
+ * @param {(this: any, key: string, value: any) => any} [reviver] 
+ * @returns {T}
  */
 JSOX.parse = function( msg, reviver ) {
 	let parse_level = _parse_level++;
@@ -2202,13 +2257,24 @@ JSOX.defineClass = function( name, obj ) {
 };
 
 /**
- * define a class to be used for serialization
+ * deprecated; define a class to be used for serialization
+ *
  * @param {string} named
  * @param {class} ptype
  * @param {(any)=>any} f
  */
-JSOX.toJSOX =
 JSOX.registerToJSOX = function( name, ptype, f ) {
+	throw new Error( "registerToJSOX deprecated; please use toJSOX:" + prototypeName + prototype.toString() );
+};
+
+/**
+ * define a class with special serialization rules.
+ *
+ * @param {string} named
+ * @param {class} ptype
+ * @param {(any)=>any} f
+ */
+JSOX.toJSOX = function( name, ptype, f ) {
 	//console.log( "SET OBJECT TYPE:", ptype, ptype.prototype, Object.prototype, ptype.constructor );
 	if( !ptype.prototype || ptype.prototype !== Object.prototype ) {
 		if( toProtoTypes.get(ptype.prototype) ) throw new Error( "Existing toJSOX has been registered for prototype" );
@@ -2221,6 +2287,7 @@ JSOX.registerToJSOX = function( name, ptype, f ) {
 		toObjectTypes.set( key, { external:true, name:name, cb:f } );
 	}
 };
+
 /**
  * define a class to be used for deserialization
  * @param {string} prototypeName 
@@ -2237,9 +2304,24 @@ JSOX.fromJSOX = function( prototypeName, o, f ) {
 	fromProtoTypes.set( prototypeName, {protoCon: o.prototype.constructor, cb:f } );
 
 };
+
+
+/**
+ * deprecated; use fromJSOX instead
+ */
 JSOX.registerFromJSOX = function( prototypeName, o /*, f*/ ) {
 	throw new Error( "deprecated; please adjust code to use fromJSOX:" + prototypeName + o.toString() );
 };
+
+/**
+ * Define serialization and deserialization methods for a class.
+ * This is the same as registering separately with toJSOX and fromJSOX methods.
+ * 
+ * @param {string} name - Name used to prefix objects of this type encoded in JSOX
+ * @param {class} prototype - prototype to match when serializing, and to create instaces of when deserializing.
+ * @param {(stringifier:JSOXStringifier)=>{string}} to - `this` is the value to convert; function to call to encode JSOX from an object
+ * @param {(field:string,val:any)=>{any}} from - handle storing revived value in class
+ */
 JSOX.addType = function( prototypeName, prototype, to, from ) {
 	JSOX.toJSOX( prototypeName, prototype, to );
 	JSOX.fromJSOX( prototypeName, prototype, from );
@@ -2251,7 +2333,7 @@ JSOX.registerToFrom = function( prototypeName, prototype/*, to, from*/ ) {
 
 /**
  * Create a stringifier to convert objects to JSOX text.  Allows defining custom serialization for objects.
- * @returns {Stringifier}
+ * @returns {JSOXStringifier}
  */
 JSOX.stringifier = function() {
 	let classes = [];
@@ -2275,7 +2357,7 @@ JSOX.stringifier = function() {
 		if( s.includes( "\u{FEFF}" ) ) return (useQuote + JSOX.escape(s) +useQuote);
 		return ( ( s in keywords /* [ "true","false","null","NaN","Infinity","undefined"].find( keyword=>keyword===s )*/
 			|| /[0-9\-]/.test(s[0])
-			|| /[\n\r\t \[\]{}()<>\~!+*/.:,\-"'`]/.test( s ) )?(useQuote + JSOX.escape(s) +useQuote):s )
+			|| /[\n\r\t #\[\]{}()<>\~!+*/.:,\-"'`]/.test( s ) )?(useQuote + JSOX.escape(s) +useQuote):s )
 	}
 
 
@@ -2798,7 +2880,7 @@ JSOX.stringifier = function() {
 
 			case "object":
 				//_DEBUG_STRINGIFY && console.log( "ENTERINT OBJECT EMISSION WITH:", v );
-				if( v ) return "ref"+v;
+				if( v ) return v;
 
 				// Due to a specification blunder in ECMAScript, typeof null is "object",
 				// so watch out for that case.
@@ -3005,8 +3087,8 @@ JSOX.stringifier = function() {
 		for( n = 0; n < l; n++ ) {
 			let index0 = decodings$1[buf[n*4]];
 			let index1 = (n*4+1)<buf.length?decodings$1[buf[n*4+1]]:-1;
-			let index2 = (index1>=0) && (n*4+2)<buf.length?decodings$1[buf[n*4+2]]:-1;
-			let index3 = (index2>=0) && (n*4+3)<buf.length?decodings$1[buf[n*4+3]]:-1;
+			let index2 = (index1>=0) && (n*4+2)<buf.length?decodings$1[buf[n*4+2]]:-1 ;
+			let index3 = (index2>=0) && (n*4+3)<buf.length?decodings$1[buf[n*4+3]]:-1 ;
 			if( index1 >= 0 )
 				out[n*3+0] = (( index0 ) << 2 | ( index1 ) >> 4);
 			if( index2 >= 0 )
@@ -3033,7 +3115,10 @@ JSOX.stringify = function( object, replacer, space ) {
 ].map( row=>{ return { firstChar : row[0], lastChar: row[1], bits : row[2] }; } );
 
 // usage
-//  var RNG = require( "salty_random_generator")( callback }
+//  var RNG = require( "@d3x0r/srg2")( callback }
+//  import {SaltyRNG} from "@d3x0r/srg2"
+//  import {SaltyRNG} from "/node_modules/@d3x0r/srg2/salty_random_generator.mjs"
+//
 //    constructor callback is used as a source of salt to the generator
 //    the callback is passed an array to which strings are expected to be added
 //     ( [] )=>{ [].push( more_salt ); }
@@ -3323,12 +3408,6 @@ function toBytes(data) {
     return data;
 }
 const u32 = (arr) => new Uint32Array(arr.buffer, arr.byteOffset, Math.floor(arr.byteLength / 4));
-//import { toBytes, wrapConstructorWithOpts, assertNumber, u32, } from './utils.js';
-
-
-class Hash {
-    // Safe version that clones internal state
-}
 
 
 
@@ -3376,10 +3455,9 @@ function rightEncodeK12(n) {
     return new Uint8Array(res);
 }
 
-class Keccak extends Hash {
+class Keccak {
     // NOTE: we accept arguments in bytes instead of bits here.
     constructor(blockLen, suffix, outputLen, enableXOF = false, rounds = 12) {
-        super();
         this.blockLen = blockLen;
         this.suffix = suffix;
         this.outputLen = outputLen;
@@ -3756,7 +3834,7 @@ RNG2.initialEntropy = null;
 
 let salt = null;
 function getSalt2 (saltbuf) {
-    if( salt ) {
+    if( salt !== undefined && salt !== null ) {
         saltbuf.push( salt );
         salt = null;
     }

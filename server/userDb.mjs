@@ -6,8 +6,7 @@ import {ObjectStorage} from "sack.vfs/object-storage"
 import {StoredObject} from "sack.vfs/object-storage-object"
 const JSOX=sack.JSOX;
 const stringifier = JSOX.stringifier();
-const config = await import( "file://"+process.cwd()+"/config.jsox" );
-export {config as config_}
+import {config} from "./config.mjs";
 import {BloomNHash} from "sack.vfs/bloomnhash"
 import {SlabArray}  from "sack.vfs/slab-array"
 import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
@@ -322,6 +321,7 @@ const UserDb = {
 	saveContinue(user, id){
 		if( user.next_login )
 			l.reconnect.delete( user.next_login );
+		console.log( "Save Continue - puts reconnect into database: ", id, user );
 		l.reconnect.set( id, user );
 		user.next_login = id;
 		return user.store();
@@ -360,19 +360,31 @@ const UserDb = {
 	async requestService( domain, service, forUser ) {
 
 		let oldDomain = await l.domains.get( domain );
+		if( !oldDomain ) {
+			// don't allow guests to create services.
+			if( !config.allowGuestServices && forUser.guest ){
+				//console.log( "Guests cannot create services..." );
+				return null;
+			}
+		}
 		//console.log( "Domain:", domain, oldDomain, forUser );
 		// this is actually check pending registrations (which might only be a service and not a domain.)
-		createInitialDomain( domain, service, forUser );
+		await createInitialDomain( domain, service, forUser );
+
+		// re-fetch domain in case it was just created above
+		if( !oldDomain ) oldDomain = await l.domains.get( domain );
 
 		debug_ && console.log( "Have a domain now, doncha?", domain, service, oldDomain );
 		const oldService = await oldDomain?.getService( service, forUser );
-
 		if( !oldDomain || !oldService ) {
 			// don't allow guests to create services.
 
-			if( !config.allowGuestServices && forUser.guest ) return null;
+			if( !config.allowGuestServices && forUser.guest ){
+				//console.log( "Guests cannot create services..." );
+				return null;
+			}
 			
-			console.trace( "Failed to find service...", domain, service );
+			//console.trace( "Failed to find service...", domain, service );
 			return undefined;
 		} /*else {
 			// it might still be pending registration....
@@ -380,6 +392,21 @@ const UserDb = {
 			console.log( 'already exists, but registrations:', l.registrations, dom.services );
 		}*/
 		//return oldService;
+		// Ensure non-guest users have a sash for this service.
+		// First user (creator) already received the master sash via makeBadges().
+		// Subsequent users get a clone of the service's default sash on first access.
+		if( forUser && !forUser.guest ) {
+			let hasSash = false;
+			for( const s of forUser.sashes ) {
+				const sash = (s instanceof Promise) ? await s : s;
+				if( sash && sash.service === oldService ) { hasSash = true; break; }
+			}
+			// Subsequent users share the service's defaultSash object so badge
+			// edits by the admin propagate to everyone wearing it.
+			if( !hasSash && oldService.defaultSash ) {
+				forUser.addSash( oldService.defaultSash );
+			}
+		}
 		const inst = oldService.getConnectedInstance();
 		console.log( "forUser", forUser, inst );
 		return inst;

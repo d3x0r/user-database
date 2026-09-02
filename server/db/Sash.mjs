@@ -76,7 +76,7 @@ export class Sash extends StoredObject{
         for( domain ) {
         	// // test sash.for( domain ) true....
 		if( !this.#service ) console.log( "Sash does not belong to a service?" );
-        	return ( this.#service.domain === domain );
+        	return ( this.#service.domain.name === domain );
         }
 	store() {
 		//console.trace( "WHO IS SAVING A SASH SO EARLY?" );

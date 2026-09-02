@@ -3,7 +3,8 @@ const debug_ = false;
 import {sack} from "sack.vfs"
 import { Organization } from "./Organization.mjs";
 import {Service} from "./Service.mjs"
-import {l,config_ as config, UserDb,StoredObject} from "../userDb.mjs"
+import {config} from "../config.mjs"
+import {l,UserDb,StoredObject} from "../userDb.mjs"
 
 
 export class StoredDomain extends StoredObject {
@@ -159,8 +160,13 @@ export class Domain  extends StoredObject{
 						res( null );
 						return;
 					}
-					if( forUser )
-						await createInitialDomain( this.name, name, forUser );
+					if( forUser ) {
+						const newSrvc = await createInitialDomain( this.name, name, forUser );
+						if( newSrvc ) {
+							res( newSrvc );
+							return;
+						}
+					}
 					// not pending, not known, now what?
 					res( null );
 				}

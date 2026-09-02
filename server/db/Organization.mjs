@@ -1,9 +1,9 @@
 import {sack} from "sack.vfs"
 const JSOX = sack.JSOX;
 
-import { StoredDomain } from "./Domain.mjs";
+import { Domain,StoredDomain } from "./Domain.mjs";
 import {User} from "./User.mjs"
-import {l,StoredObject} from "../userDb.mjs"
+import {UserDb,l,StoredObject} from "../userDb.mjs"
 
 export class StoredOrganization{
 	orgId = null;

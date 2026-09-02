@@ -4,6 +4,7 @@
 import {Popup,popups} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
 
+
 import {connection,openSocket,Alert} from "../login/webSocketClient.js"
 
 const l = {
@@ -11,6 +12,7 @@ const l = {
 	ws :null,
 }
 
+import {requestService,firstConnect} from "/node_modules/@d3x0r/user-database-remote/requestService.js"  // reverse call openSocket
 
 
 export class Profile extends Popup {
@@ -46,6 +48,7 @@ export class Profile extends Popup {
 				openSocket( info.addr, "profile" ).then( (ws)=>{
 					ws.onmessage = handleMessage;
 					ws.onclose = handleClose;
+					ws.send( info );
 					this_.load();					
 					return ws;
 				});
