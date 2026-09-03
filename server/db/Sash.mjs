@@ -1,4 +1,5 @@
 import {sack} from "sack.vfs"
+import {whenLoaded} from "sack.vfs/object-storage"
 
 import {l,StoredObject} from "../userDb.mjs"
 
@@ -24,8 +25,7 @@ export function sashToJSOX(stringifier) {
 export function sashFromJSOX(field,val) {
 	//console.log( "Sash revival method:", this, field, val );
 	if( !field ) {
-		if( this.service instanceof Promise ) this.service.then( val=>this.sash.set( val ) );
-		else   this.sash.set( this.service )
+		whenLoaded( this.service, val=>this.sash.set( val ) );
 		return this.sash;
 	}
 
@@ -34,11 +34,24 @@ export function sashFromJSOX(field,val) {
 	return this.sash[field] = val;
 }
 
+// two revived copies of one sash record must still compare equal
+export function sameSash( a, b ) {
+	if( !a || !b ) return false;
+	if( a === b ) return true;
+	if( a.sashId && b.sashId ) return a.sashId === b.sashId;
+	if( a.name !== b.name ) return false;
+	const sa = a.service, sb = b.service;
+	if( !sa || !sb ) return false;
+	if( sa === sb ) return true;
+	return !!sa.serviceId && sa.serviceId === sb.serviceId;
+}
+
 export class Sash extends StoredObject{
 	#service = null;
 	name = null;  // name of the sash
 	master = false;
 	badges = []; // this sash has these badges.
+	sashId = null; // set on sashes created through Service.createSash; older ones match by name
 	constructor( ) {
 		super( l.storage );
 	}
@@ -53,7 +66,7 @@ export class Sash extends StoredObject{
 			this.store();
 		}else {
 			//console.log( "This badges and badge without set?", this.badges );
-			this.badges.forEach( badge=>((badge instanceof Promise)?badge.then( badge=>badge.set(service) ):badge.set( service )) );
+			this.badges.forEach( badge=>whenLoaded( badge, badge=>badge.set( service ) ) );
 		}
 		return this;
 	}
@@ -64,6 +77,9 @@ export class Sash extends StoredObject{
 	}
 	addBadge( badge ) {
 		this.badges.push( badge );
+	}
+	getBadge( tag ) {
+		return this.badges.find( ( b )=>b && !( b instanceof Promise ) && b.tag === tag ) || null;
 	}
 	getPerms() {
 		const p = {};

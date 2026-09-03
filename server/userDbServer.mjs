@@ -43,7 +43,9 @@ sack.system.enableExitSignal( ()=>{
 // make sure we load the import script
 
 const JSOX = sack.JSOX;
-import {UserDb,User,Device,UniqueIdentifier,go} from "./userDb.mjs"
+import {UserDb,User,Device,UniqueIdentifier,go,l as db,settle} from "./userDb.mjs"
+import {sameService, domainName} from "./db/Service.mjs"
+import {sameSash} from "./db/Sash.mjs"
 
 const storageDb = sack.DB( process.env.DSN || config.dsn || "maria-udb");
 
@@ -106,6 +108,8 @@ const l = {
 	services : new Map(),
 	states : [],
 	expect : new Map(),
+	nameIndexDelete( name ) { try { db.name && db.name.delete && db.name.delete( name ); } catch( err ) { console.log( "name index delete failed:", err ); } },
+	emailIndexDelete( email ) { try { db.email && db.email.delete && db.email.delete( email ); } catch( err ) { console.log( "email index delete failed:", err ); } },
 }
 
 
@@ -146,20 +150,24 @@ if( withLoader ) go.then( ()=>{
 //}
 
 
-UserDb.on( "pickSash", (user, choices)=>{
+UserDb.on( "pickSash", ( { user, choices } )=>{
 	for( let state of l.states ) {
-		if( state.user === user
-		  && !state.connected 
-		  && !state.picking ) {
+		if( state.user === user && !state.picking ) {
 			state.picking = true;
-			const p = { p:null, res:null, rej:null};
-			p.p = new Promise( (res,rej)=>{ p.res = res; p.rej= rej } );
+			const p = { p:null, res:null, rej:null };
+			p.p = new Promise( ( res, rej )=>{ p.res = res; p.rej = rej; } );
 			state.waits.pickSash = p;
-			state.ws.send( JSOX.stringify( { op:"pickSash", choices: choices } ) );
+			// a client that never answers must not hold the login forever
+			const timer = setTimeout( ()=>p.res( null ), 60000 );
+			p.p.finally( ()=>{ clearTimeout( timer ); state.picking = false; state.waits.pickSash = null; } );
+			state.ws.send( JSOX.stringify( { op:"pickSash"
+				, choices: choices.map( ( s )=>( { name:s.name, master:!!s.master
+					, badges: ( s.badges || [] ).filter( ( b )=>b && b.tag ).map( ( b )=>b.tag ) } ) ) } ) );
 			return p.p;
 		}
 	}
-	throw new Error( "How are you picking a sash for a user that's not connected?" );
+	console.log( "pickSash: no login connection for", user && user.name, "; using the default choice" );
+	return null;
 } );
 
 function serviceRequestFilter( req, res ) {
@@ -184,6 +192,9 @@ console.log( "--- write head --- " );
 function expectRequest( msg ) {
 	const id = sack.Id();
 	msg.badges = msg.sash || {};
+	// same process as the login side: pick up the User that was just authorized
+	msg.user = db.expectedUsers.get( msg.UID ) || null;
+	db.expectedUsers.delete( msg.UID );
 	l.expect.set( id, msg );
 	return id;
 }
@@ -319,41 +330,197 @@ export class UserServer extends Protocol {
 
 		}
 
-		function handleProfile( ws, msg_ ) {
-			//console.log( 'profile Socket message:', msg );
+		async function handleProfile( ws, msg_ ) {
+			// first message is the expect key handed out through the login flow
 			if( !user ) {
 				user = l.expect.get( msg_ );
-				console.log( "Using message to look up expected user", msg_, user );
 				if( !user ) {
 					ws.send( JSOX.stringify( {op:"badIdentification"}));
 					ws.close( 3002, "Bad Identification" );
 					return;
-				}else
-					l.expect.delete( msg_ );
-				//console.log( "user connected!", user );
-			}else {
-				const is_ll = msg_[0] === "\0";
-				const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
-				if( is_ll && msg.op === "get" ){
-					//, {op:"get", url:url, id:newEvent.id } );
-					if( msg.url ){
-			                	const res = getResource( msg.url, null, user );
-						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
-					}
-					else
-						ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:{code:0,content:"bad request",contentType:"text/plain"} } ) );
-					return true;
 				}
-				else if( msg.op === "" ){
-					if( !user.badges.edit ) {
-
-					}else {
-
-					}
+				l.expect.delete( msg_ );
+				try {
+					ws.send( JSOX.stringify( await profileSummary( user ) ) );
+				} catch( err ) {
+					console.log( "profile summary failed:", err );
+					ws.send( JSOX.stringify( { op:"profile", name:user.name, editable:false, guest:true, sashes:[], error:"Profile could not be read." } ) );
 				}
+				return;
+			}
+			const is_ll = msg_[0] === "\0";
+			const msg = is_ll?JSOX.parse( msg_.substr(1) ):JSOX.parse( msg_ );
+			if( is_ll && msg.op === "get" ){
+				if( msg.url ){
+					const res = getResource( msg.url, null, user );
+					ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:res } ) );
+				}
+				else
+					ws.send( JSOX.stringify( {op:"GET", id:msg.id, res:{code:0,content:"bad request",contentType:"text/plain"} } ) );
+				return true;
+			}
+			const reply = ( r )=>ws.send( JSOX.stringify( Object.assign( {op:"result", id:msg.id}, r ) ) );
+			const account = user.user; // real User when the login server is also the profile host
+			if( msg.op === "getProfile" ) {
+				try { ws.send( JSOX.stringify( await profileSummary( user ) ) ); }
+				catch( err ) { console.log( "profile summary failed:", err ); reply( { ok:false, error:"Profile could not be read." } ); }
+				return true;
+			}
+			if( !account ) {
+				reply( { ok:false, error:"Profile editing is only available on the login server that holds the account." } );
+				return true;
+			}
+			try {
+				switch( msg.op ) {
+				case "setName": {
+					const name = String( msg.name || "" ).trim();
+					if( name.length < 3 ) return reply( { ok:false, error:"Display name must be at least 3 characters." } );
+					if( name.includes( "\u{FEFF}" ) ) return reply( { ok:false, error:"Display name contains a reserved character." } );
+					if( account.guest ) return reply( { ok:false, error:"Guest accounts keep the name they logged in with." } );
+					if( name !== account.name && await UserDb.getUser( name ) ) return reply( { ok:false, error:"That display name is already in use." } );
+					const old = account.name;
+					account.name = name;
+					await account.store();	// also indexes the new name
+					if( old !== name ) l.nameIndexDelete( old );
+					user.name = name;
+					return reply( { ok:true, name } );
+				}
+				case "setPassword": {
+					// client sends SaltyRNG.id() hashes, the same as login/create do
+					if( account.guest ) return reply( { ok:false, error:"Guest accounts have no password." } );
+					if( !msg.password ) return reply( { ok:false, error:"A new password is required." } );
+					if( account.pass !== msg.current ) return reply( { ok:false, error:"Current password does not match." } );
+					account.pass = String( msg.password );
+					await account.store();
+					return reply( { ok:true } );
+				}
+				case "setEmail": {
+					// email arrives hashed; the server never sees the address itself
+					if( account.guest ) return reply( { ok:false, error:"Guest accounts have no recovery email." } );
+					if( !msg.email ) return reply( { ok:false, error:"An email is required." } );
+					if( account.pass !== msg.current ) return reply( { ok:false, error:"Current password does not match." } );
+					const other = await User.getEmail( msg.email );
+					if( other && other !== account ) return reply( { ok:false, error:"That email is already registered." } );
+					const old = account.email;
+					account.email = String( msg.email );
+					await account.store();
+					if( old && old !== account.email ) l.emailIndexDelete( old );
+					return reply( { ok:true } );
+				}
+				case "createSash": {
+					const m = await managedService( account, msg.domain, msg.service );
+					if( !m ) return reply( { ok:false, error:"You do not manage that service." } );
+					const sash = await m.service.createSash( msg.name );
+					if( msg.badges && msg.badges.length ) await m.service.setSashBadges( sash, msg.badges );
+					return reply( { ok:true, name:sash.name } );
+				}
+				case "setSashBadges": {
+					const m = await managedService( account, msg.domain, msg.service );
+					if( !m ) return reply( { ok:false, error:"You do not manage that service." } );
+					const sash = await m.service.getSashByName( msg.sash );
+					if( !sash ) return reply( { ok:false, error:"No sash named " + msg.sash + "." } );
+					await m.service.setSashBadges( sash, msg.badges );
+					return reply( { ok:true } );
+				}
+				case "grantSash": {
+					const m = await managedService( account, msg.domain, msg.service );
+					if( !m ) return reply( { ok:false, error:"You do not manage that service." } );
+					const sash = await m.service.getSashByName( msg.sash );
+					if( !sash ) return reply( { ok:false, error:"No sash named " + msg.sash + "." } );
+					const target = msg.account && await UserDb.getUser( String( msg.account ) );
+					if( !target ) return reply( { ok:false, error:"No user found by that account or display name." } );
+					const added = await target.addSash( sash );
+					return reply( { ok:true, name:target.name, already:!added } );
+				}
+				case "revokeSash": {
+					const m = await managedService( account, msg.domain, msg.service );
+					if( !m ) return reply( { ok:false, error:"You do not manage that service." } );
+					const sash = await m.service.getSashByName( msg.sash );
+					if( !sash ) return reply( { ok:false, error:"No sash named " + msg.sash + "." } );
+					const target = msg.account && await UserDb.getUser( String( msg.account ) );
+					if( !target ) return reply( { ok:false, error:"No user found by that account or display name." } );
+					if( target === account && sash.master ) return reply( { ok:false, error:"Have another master account take your master sash; you cannot drop your own." } );
+					const removed = await target.removeSash( sash );
+					return reply( { ok:true, name:target.name, removed } );
+				}
+				case "getUserSashes": {
+					// which of this service's sashes one user wears; for the assignment view
+					const m = await managedService( account, msg.domain, msg.service );
+					if( !m ) return reply( { ok:false, error:"You do not manage that service." } );
+					const target = msg.account && await UserDb.getUser( String( msg.account ) );
+					if( !target ) return reply( { ok:false, error:"No user found by that account or display name." } );
+					const worn = [];
+					for( let i = 0; i < target.sashes.length; i++ ) {
+						let w = target.sashes[i];
+						w = target.sashes[i] = await settle( w );
+						if( w && w.sash && !( "badges" in w ) ) w = target.sashes[i] = w.sash;
+						if( w && sameService( await settle( w.service ), m.service ) ) worn.push( w.name );
+					}
+					return reply( { ok:true, name:target.name, guest:!!target.guest, sashes:worn } );
+				}
+				default:
+					console.log( "unhandled profile message:", msg );
+					return reply( { ok:false, error:"Unknown operation: " + msg.op } );
+				}
+			} catch( err ) {
+				console.log( "profile operation failed:", msg.op, err );
+				reply( { ok:false, error:"Operation failed." } );
 			}
 		}
 
+		// the account's sash for (domain, service), if it lets them manage that service's sashes
+		async function managedService( account, domain, serviceName ) {
+			for( let sash of account.sashes ) {
+				sash = await settle( sash );
+				if( sash && sash.sash && !( "badges" in sash ) ) sash = sash.sash;
+				if( !sash ) continue;
+				const service = await settle( sash.service );
+				if( !service ) continue;
+				if( service.name !== serviceName || domainName( service.domain ) !== domain ) continue;
+				if( await service.canManage( sash ) ) return { sash, service };
+			}
+			return null;
+		}
+
+		// what the profile page gets to show: never the hashes, never the ids
+		async function profileSummary( expected ) {
+			const account = expected.user;
+			const sashes = [];
+			if( account ) for( let sash of account.sashes ) {
+				sash = await settle( sash );
+				if( sash && sash.sash && !( "badges" in sash ) ) sash = sash.sash;
+				if( !sash ) continue;
+				const badges = [];
+				// a master sash carries every badge its service defines
+				let badgeList = sash.badges || [];
+				if( sash.master && sash.service && sash.service.masterSash ) {
+					const ms = await settle( sash.service.masterSash );
+					if( ms && ms.badges && ms.badges.length ) badgeList = ms.badges;
+				}
+				for( let badge of badgeList ) {
+					badge = await settle( badge );
+					if( badge ) badges.push( { tag:badge.tag, name:badge.name } );
+				}
+				const service = await settle( sash.service );
+				const entry = { name:sash.name, master:!!sash.master, badges, service: service ? { domain:domainName( service.domain ), name:service.name } : null, manage:false };
+				if( service && await service.canManage( sash ) ) {
+					entry.manage = true;
+					const master = await service.allSashes();
+					const ms = master.find( ( x )=>x.master );
+					entry.serviceBadges = ( ms ? ms.badges : [] ).map( ( b )=>( { tag:b.tag, name:b.name, description:b.description } ) );
+					entry.serviceSashes = master.map( ( x )=>( { name:x.name, master:!!x.master, isDefault: sameSash( x, service.defaultSash ), badges: x.badges.map( ( b )=>b.tag ) } ) );
+				}
+				sashes.push( entry );
+			}
+			return { op:"profile"
+				, name: account ? account.name : expected.name
+				, account: account ? account.account : null
+				, guest: account ? !!account.guest : true
+				, hasEmail: !!( account && account.email )
+				, created: account ? account.created : null
+				, editable: !!account
+				, sashes };
+		}
 
 		function handleAdmin( ws, msg_ ) {
 			//console.log( 'admin Socket message:', msg );
@@ -757,6 +924,7 @@ export class UserServer extends Protocol {
 			// this will wait until a client asks for this service; even on reconnect
 			const srvc = await UserDb.getService( ws, msg.svc );
 			//console.log( "Service:", srvc );
+			await srvc.syncBadges( msg.svc && msg.svc.badges );
 			const inst = srvc.getServiceInstance( msg.sid, ws );
 			if( inst ){
 				console.log( "This is connecting the socket to the active instance..." );
@@ -773,7 +941,7 @@ export class UserServer extends Protocol {
 			console.log( "otherwise find the service (post reg)", msg );
 			// msg has addr:[], iaddr:[], loc:(uid), sid:false, op:register
 			//       , svc:{badges,description,domain,or,service}
-			const svcInst = await  UserDb.getService( ws, msg.svc ).then( (s)=>s.addInstance( ws ) );
+			const svcInst = await  UserDb.getService( ws, msg.svc ).then( async (s)=>{ await s.syncBadges( msg.svc && msg.svc.badges ); return s.addInstance( ws ); } );
 			if( svcInst ) {
 				// register service finally gets a result... and sends my response.
 				console.log( "Service resulted, and is an instance?", svcInst );
@@ -808,9 +976,12 @@ export class UserServer extends Protocol {
 		}
 	}
 
-	function pickedSash(ws,msg ) {
-		if( msg.ok )  state.waits.pickSash.res( msg.sash );
-		else          state.waits.pickSash.rej( msg.sash );
+	function pickedSash( ws, msg ) {
+		const state = l.states.find( ( st )=>st.ws === ws );
+		const wait = state && state.waits.pickSash;
+		if( !wait ) { console.log( "pickSash reply with nothing waiting:", msg ); return; }
+		if( msg.ok ) wait.res( msg.sash );
+		else         wait.res( null ); // declined or failed: fall back rather than fail the login
 	}
 
 

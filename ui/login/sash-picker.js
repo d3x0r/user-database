@@ -31,7 +31,7 @@ export class SashPicker extends Popup {
 		import( opts?.sashScript || "pickSashForm.js" ).then( ( sashModule ) => {
 			this.sashModule = sashModule;
 			// NOTE: original referenced undefined `pickSashForm`; behavior preserved.
-			sashModule.setForm( /* @ts-ignore */ pickSashForm );
+			sashModule.setForm( this );
 		} ).catch( () => {
 			console.log( "Sash form resulted with an error?" );
 		} );
@@ -46,12 +46,8 @@ export class SashPicker extends Popup {
 		} );
 
 		this.on( "ok", () => {
-			if( this.sashModule ) {
-				const choice = this.sashModule.getChoice();
-				if( this.promise ) this.promise.res( choice );
-			} else if( this.promise ) {
-				this.promise.res( this.choices[0] );
-			}
+			const choice = this.sashModule ? this.sashModule.getChoice() : null;
+			if( this.promise ) this.promise.res( choice || this.choices[0] );
 			this.hide();
 		} );
 		this.on( "cancel", () => {
@@ -61,11 +57,14 @@ export class SashPicker extends Popup {
 	}
 
 	/** @param {any[]} choices */
-	show( choices ) {
-		this.reset();
+	/** @param {any[]} choices @param {{p:Promise<any>,res:Function,rej:Function}} [promise] */
+	show( choices, promise ) {
+		if( promise ) this.promise = promise;
+		this.on( "reset" );
 		this.choices = choices;
 		if( this.sashModule )
 			for( const choice of choices ) this.sashModule.addChoice( choice );
 		super.show();
+		this.center();
 	}
 }

@@ -1,3 +1,4 @@
+import {whenLoaded} from "sack.vfs/object-storage"
 import {sack} from "sack.vfs"
 const JSOX = sack.JSOX;
 
@@ -19,8 +20,7 @@ export class StoredOrganization{
 export function orgFromJSOX(field,val) {
 	try {
 	if( !field ) {
-		this.org.domains.forEach( domain=>{ ( domain instanceof Promise )?domain.then(domain=>
-				 ((domain instanceof StoredDomain)?domain.domain.set(this): domain.set(this)) ) : domain.set( this ) } );
+		this.org.domains.forEach( domain=>whenLoaded( domain, domain=>( ( domain instanceof StoredDomain ) ? domain.domain.set( this ) : domain.set( this ) ) ) );
 		return this.org;
 	}
 	return this.org[field] = val;

@@ -1,6 +1,7 @@
 const debug_ = false;
 
 import {sack} from "sack.vfs"
+import {whenLoaded} from "sack.vfs/object-storage"
 import { Organization } from "./Organization.mjs";
 import {Service} from "./Service.mjs"
 import {config} from "../config.mjs"
@@ -14,15 +15,15 @@ export class StoredDomain extends StoredObject {
 export function domainFromJSOX(field,val) {
 	if( !field ) {
 		//console.log( "domain from JSOX this?", this );
-		this.domain.services.forEach( service=>((service instanceof Promise)?service.then(service=>service.set(this)):service.set( this )) );
+		this.domain.services.forEach( service=>whenLoaded( service, service=>service.set( this ) ) );
 		//console.log( "resolve with:", this.domain );
 		return this.domain;
 	}
 	if( field === "services" ) {
 		return this.domain[field]=val;
 	}
-	// possible redirection of arrays and members...
-	return (this.domain[field] = val),undefined;
+	// return the kept value: arrays of ~or references revive empty otherwise
+	return this.domain[field] = val;
 }
 
 export async function createInitialDomain(domain,service, user) {

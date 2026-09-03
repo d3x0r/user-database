@@ -1,17 +1,77 @@
 
-<div>
+<div class="profile-form">
 
-<p>current username: <span id="username"> </span>
-<p>Sashes:<UL>
-	<li><span id="username"> </span> </li>
-	</ul>
-	
+<div class="profile-section">
+	<div class="profile-row"><span class="profile-label">Display name</span>
+		<input id="displayName" class="loginUsername" type="text" autocomplete="nickname">
+		<button id="saveName" class="button"><span class="buttonInner">Save</span></button>
+	</div>
+	<div class="profile-row"><span class="profile-label">Account</span> <span id="account"></span></div>
+	<div class="profile-row"><span class="profile-label">Member since</span> <span id="created"></span></div>
+	<div class="profile-row"><span class="profile-label">Recovery email</span> <span id="emailState"></span>
+		<button id="toggleEmail" class="button"><span class="buttonInner">Change</span></button>
+	</div>
+</div>
 
-<p>update Password: <span> <button>ClickMe</button></span>
+<div class="profile-section">
+	<div class="profile-label">Sashes</div>
+	<ul id="sashes"></ul>
+</div>
 
+<!-- filled per managed service by profileForm.js; hidden when the account manages nothing -->
+<div id="manage" style="display:none"></div>
+
+<div class="profile-section" id="passwordSection">
+	<div class="profile-label">Change password</div>
+	<div class="profile-row"><span class="profile-label">Current</span> <input id="currentPassword" class="loginPassword" type="password" autocomplete="current-password"></div>
+	<div class="profile-row"><span class="profile-label">New</span> <input id="newPassword" class="loginPassword" type="password" autocomplete="new-password"></div>
+	<div class="profile-row"><span class="profile-label">Again</span> <input id="newPassword2" class="loginPassword" type="password" autocomplete="new-password"></div>
+	<div class="profile-row"><button id="savePassword" class="button"><span class="buttonInner">Change Password</span></button></div>
+</div>
+
+<div class="profile-section" id="emailSection">
+	<div class="profile-label">Change recovery email</div>
+	<div class="profile-row"><span class="profile-label">Email</span> <input id="newEmail" class="loginUsername" type="email" autocomplete="email"></div>
+	<div class="profile-row"><span class="profile-label">Password</span> <input id="emailPassword" class="loginPassword" type="password" autocomplete="current-password"></div>
+	<div class="profile-row"><button id="saveEmail" class="button"><span class="buttonInner">Change Email</span></button></div>
+</div>
+
+<div class="profile-section">
+	<div id="status" class="profile-status"></div>
+	<button id="logout" class="button"><span class="buttonInner">Log Out</span></button>
+</div>
 
 </div>
-   	
+
+<style>
+.profile-form { min-width: 22em; }
+.profile-section { margin: 0.6em 0.4em; padding-bottom: 0.4em; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.profile-section:last-child { border-bottom: none; }
+.profile-row { display: flex; align-items: center; gap: 0.5em; margin: 0.25em 0; }
+.profile-label { min-width: 7em; opacity: 0.8; }
+.profile-status { min-height: 1.2em; margin: 0.3em 0; font-weight: bold; }
+.profile-status.error, .profile-status.ok { padding: 0.3em 0.5em; border-radius: 0.3em; background: rgba(0,0,0,0.35); }
+.profile-status.error { color: #ff9a9a; border-left: 0.3em solid #ff9a9a; }
+.profile-status.ok { color: #a8ffa8; border-left: 0.3em solid #a8ffa8; }
+#sashes { margin: 0.2em 0 0.2em 1.2em; padding: 0; }
+#sashes li { margin: 0.1em 0; }
+.sash-master { font-weight: bold; }
+.sash-badges { opacity: 0.8; font-size: 0.9em; }
+/* the popups dark theme paints inputs teal; the browser's default placeholder grey
+   sits at the same lightness, so give hints their own contrast */
+.profile-form input::placeholder { color: rgba(255,255,255,0.75); opacity: 1; font-style: italic; }
+.manage-title { margin-bottom: 0.3em; }
+.sash-table { border-collapse: collapse; margin: 0.3em 0; }
+.sash-table td { padding: 0.15em 0.5em; text-align: center; }
+.sash-table td:first-child { text-align: left; }
+.sash-table tr:first-child td { opacity: 0.8; font-size: 0.9em; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.manage-service select { min-width: 8em; }
+.assign-box { margin: 0.3em 0 0.3em 1em; }
+.assign-row { display: flex; align-items: center; gap: 0.8em; }
+.assign-arrows { display: flex; flex-direction: column; gap: 0.3em; }
+.assign-list { min-width: 12em; }
+</style>
+
 <script type="module">
 // fillFromURL defines rootId for this script; the form lives in the popup's shadow
 // root, so document.getElementById can't see it -- ask popups for the shadow instead.

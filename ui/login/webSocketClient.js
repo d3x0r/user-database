@@ -406,14 +406,19 @@ function processMessage(ws,msg_) {
 }
 
 async function pickSash(ws, choices) {
-	if (l.loginForm && l.loginForm.pickSash) {
-		const choice = await l.loginForm.pickSash(msg.choices);
-		if (choice)
-			ws.send({ op: "pickSash", ok: true, sash: choice });
-		else
-			ws.send({ op: "pickSash", ok: false, sash: "User Declined Choice." });
+	// choices: [{name, master, badges:[tags]}] -- reply with the chosen sash's name
+	const reply = ( ok, sash )=>ws.send( JSOX.stringify( { op:"pickSash", ok, sash } ) );
+	if( l.loginForm && l.loginForm.pickSash ) {
+		try {
+			const choice = await l.loginForm.pickSash( choices );
+			if( choice ) return reply( true, choice.name || choice );
+			return reply( false, "User Declined Choice." );
+		} catch( err ) {
+			console.log( "sash picker failed, letting the server choose:", err );
+			return reply( false, "Choice not possible." );
+		}
 	}
-	ws.send({ op: "pickSash", ok: false, sash: "Choice not possible." });
+	reply( false, "Choice not possible." );
 }
 
 function status( msg, arg ) {

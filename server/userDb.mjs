@@ -30,6 +30,15 @@ const configObject = {
 	actBy : null,
 };
 
+// A `~or` reference revived from storage is a promise that does NOT load by itself; the
+// store only resolves it when the record is loaded some other way or when map() asks
+// for it.  Await references through this, never directly.
+export async function settle( v ) {
+	if( !( v instanceof Promise ) ) return v;
+	if( l.storage ) return await l.storage.map( v );
+	return await v;
+}
+
 export const l = {
 	ids : configObject,
 	account   : null,
@@ -44,6 +53,7 @@ export const l = {
 	actBy : null, // relates user ids that a user can be enacted by
 	storage : null,
 	authorizing : new Map(),
+	expectedUsers : new Map(), // UID -> User, for services hosted in this process (profile/admin)
 	registrations : [], // these are for orgs that do not exist yet... waiting for someone to ask for it.
 };
 
@@ -83,7 +93,7 @@ export {Domain};
 
 // - - -  - - - - - - - -  -- - - - - - - ---  -- - - - - - - - - - -  -- - - - - -- -
 
-import { StoredService,ServiceInstance,serviceToJSOX, Service } from "./db/Service.mjs";
+import { StoredService,ServiceInstance,serviceToJSOX, Service, sameService } from "./db/Service.mjs";
 export { Service } 
 
 import {User} from "./db/User.mjs"
@@ -392,8 +402,8 @@ class UserDb extends Events {
 		if( forUser && !forUser.guest ) {
 			let hasSash = false;
 			for( const s of forUser.sashes ) {
-				const sash = (s instanceof Promise) ? await s : s;
-				if( sash && sash.service === oldService ) { hasSash = true; break; }
+				const sash = await settle( s );
+				if( sash && sameService( sash.service, oldService ) ) { hasSash = true; break; }
 			}
 			// Subsequent users share the service's defaultSash object so badge
 			// edits by the admin propagate to everyone wearing it.

@@ -1,7 +1,8 @@
 import {sack} from "sack.vfs"
 //const JSOX = sack.JSOX;
 import {config} from "../config.mjs"
-import {UserDb,l,StoredObject} from "../userDb.mjs"
+import {UserDb,l,StoredObject,settle} from "../userDb.mjs"
+import {sameSash} from "./Sash.mjs"
 
 
 export class User  extends StoredObject{
@@ -98,10 +99,29 @@ export class User  extends StoredObject{
 			if( results === 0 ) res( null );
 		});
 	}
-	addSash( sash ) {
-		console.log( "Add sash to user:", this, sash );
+	async addSash( sash ) {
+		for( let i = 0; i < this.sashes.length; i++ ) {
+			let w = this.sashes[i];
+			w = this.sashes[i] = await settle( w );
+			if( w && w.sash && !( "badges" in w ) ) w = this.sashes[i] = w.sash;
+			if( sameSash( w, sash ) ) return false; // already wearing it
+		}
 		this.sashes.push( sash );
-		this.store();
+		await this.store();
+		return true;
+	}
+	async removeSash( sash ) {
+		const keep = [];
+		let removed = false;
+		for( let w of this.sashes ) {
+			w = await settle( w );
+			if( w && w.sash && !( "badges" in w ) ) w = w.sash;
+			if( !w ) continue;
+			if( sameSash( w, sash ) ) { removed = true; continue; }
+			keep.push( w );
+		}
+		if( removed ) { this.sashes = keep; await this.store(); }
+		return removed;
 	}
 
 	async getSash( domain ) {
@@ -113,7 +133,7 @@ export class User  extends StoredObject{
 			let sash = this.sashes[s];
 			// revived from storage these are still references (promises) or the stored
 			// wrapper; settle them in place so later lookups see real Sash objects.
-			if( sash instanceof Promise ) sash = await sash;
+			sash = await settle( sash );
 			if( sash && !( "for" in sash ) && sash.sash ) sash = sash.sash;
 			if( !sash || "function" !== typeof sash.for ) { console.log( "User has an unusable sash entry:", this.sashes[s] ); continue; }
 			this.sashes[s] = sash;
@@ -126,14 +146,25 @@ export class User  extends StoredObject{
 			
 		}
 		if( found.length > 1 ) {
-			// ask user to select a sash to wear.
-			sash = await UserDb.on( "pickSash", this, found );
-			
+			// more than one hat for this service: ask the client which to wear.  Handlers
+			// get one argument and reply with a sash name (or a promise of one); on() returns
+			// every handler's result.  No answer means the most capable sash.
+			let picked = null;
+			const results = UserDb.on( "pickSash", { user:this, choices:found } );
+			if( results instanceof Array ) for( const r of results ) {
+				try { const v = await r; if( v ) { picked = v; break; } }
+				catch( err ) { console.log( "sash pick failed:", err && err.message || err ); }
+			}
+			const pickedName = picked && ( picked.name || picked );
+			sash = ( pickedName && found.find( ( s )=>s.name === pickedName ) )
+				|| found.find( ( s )=>s.master )
+				|| found.slice().sort( ( a, b )=>( b.badges ? b.badges.length : 0 ) - ( a.badges ? a.badges.length : 0 ) )[0];
 		}else sash = found[0];
-		if( sash )
+		if( sash && sash.badges instanceof Array )
 		for( let badge of sash.badges ) {
-			badges[badge.tag] = true;
-		} 
+			badge = await settle( badge );
+			if( badge && badge.tag ) badges[badge.tag] = true;
+		}
 		return badges;
 	}
 

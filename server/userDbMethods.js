@@ -232,8 +232,8 @@ ws.processMessage = function (ws, msg) {
 		ws.on( "deviceInactive", msg );
 		return true;
 	} else if (msg.op === "pickSash") {
-		// this is actually a client event.
-		return true;
+		// handled by the login client (webSocketClient.js pickSash); let it through
+		return false;
 	} else if (msg.op === "request") {
 		// reply from server
 		for (let pend of l.pending) {
