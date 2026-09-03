@@ -68,10 +68,22 @@ export class Organization  extends StoredObject{
 		//console.log( "Org is still pending???", this.domains, this );
 		const domain = this.domains.find( domain=>domain.name===name );	
 		if( !domain ) {
+			// Clients request services by (domain, service) with no org, so a domain name
+			// resolves through the l.domains index and must map to exactly one Domain.
+			// If another org already registered this name (two service.jsox files with
+			// different org names, say), attach that Domain here instead of forking a
+			// second one that the index would then hide.
+			const existing = await l.domains.get( name );
+			if( existing ) {
+				console.log( "Domain", name, "already exists under another org; sharing it with", this.name );
+				this.domains.push( existing );
+				this.store();
+				return existing;
+			}
 			console.log( "Creating domain" );
 			const newDomain = new Domain().set( this, name, forUser );
 			this.domains.push( newDomain );
-			newDomain.store();
+			await newDomain.store(); // also writes the l.domains name index
 			this.store();
 			UserDb.on( "newDomain", newDomain );
 			return newDomain;

@@ -75,8 +75,11 @@ export class Sash extends StoredObject{
 	}
         for( domain ) {
         	// // test sash.for( domain ) true....
-		if( !this.#service ) console.log( "Sash does not belong to a service?" );
-        	return ( this.#service.domain.name === domain );
+		if( !this.#service ) { console.log( "Sash does not belong to a service?" ); return false; }
+		// callers pass either a domain name or a Domain/StoredDomain; a service's domain
+		// may also be either form once revived from storage.
+		const name = ( x )=>( "string" === typeof x ) ? x : ( x && ( x.name || ( x.domain && x.domain.name ) ) );
+        	return ( name( this.#service.domain ) === name( domain ) );
         }
 	store() {
 		//console.trace( "WHO IS SAVING A SASH SO EARLY?" );

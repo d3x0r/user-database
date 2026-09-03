@@ -178,10 +178,13 @@ console.log( "--- write head --- " );
 	}
 }
 
+// The login side of this same process asked our (self-registered) "login" service to
+// expect a user.  msg is { UID, id, name, sash } from Service.mjs; keep it as the identity
+// the profile/admin sockets look up by the key we return (see handleProfile/handleAdmin).
 function expectRequest( msg ) {
 	const id = sack.Id();
-	console.log( "Expect request from user:", msg );
-	connections.set( id, msg );
+	msg.badges = msg.sash || {};
+	l.expect.set( id, msg );
 	return id;
 }
 
@@ -192,16 +195,10 @@ function openLoginServer( opts, cb )
 	enableLogin( server.server, server.server.app, expectRequest );
 
 	console.log( "login serving on " + opts.port );
-	// this connects my own service to me...
-	// do I need this?
-	//   Fails without a service configuration anyway...
-	const coreService = UserDbRemote.open( { server:config.certPath?"wss://localhost:":"ws://localhost:"+opts.port
-			, configPath:process.cwd() + "/"
-			, connect() {
-				console.log( 'Login self-service completed registration?')
-				coreService.on( "expect", expectUser );
-			}
-		 } );
+	// enableLogin() above already opens this server's own service connection to itself
+	// (that is where expectRequest is wired).  A second UserDbRemote.open() here made the
+	// service register two instances, only one of which answered expect requests, so a
+	// login that was routed to the other one never completed.
 }
 
 
@@ -468,13 +465,6 @@ export class UserServer extends Protocol {
 		
 }
 
-	function expectUser( uid, user ) {
-		const userId = sack.Id();
-		l.expect.get( userId, user )
-		console.trace( "Getting an expectation", userId, user )
-		return userId; // returning this ID is what the client will use for us...
-		// the login service will tell the client this response... 
-	}
 	
 	//console.table( disk.dir() );
 
@@ -692,14 +682,14 @@ export class UserServer extends Protocol {
 			}
 		}
 
-		const oldUser = await UserDb.User.get( msg.account );
+		const oldUser = await User.get( msg.account );
 		if( oldUser ) {
 			console.log( "user Account exists");
 			ws.send( JSON.stringify( { op:"create", success: false, account:true, id:msg.id } ) );
 			return;
 		}
 
-		const oldUser2 = msg.email && (await UserDb.User.getEmail( msg.email ));
+		const oldUser2 = msg.email && (await User.getEmail( msg.email ));
 		if( oldUser2 ) {                 
 			console.log( "create user email exists");
 			ws.send( JSON.stringify( { op:"create", success: false, email:true, id:msg.id } ) );

@@ -172,7 +172,7 @@ ws.processMessage = function (ws, msg) {
 		let pend = null;
 		for( let p = 0; p < l.pending.length; p++ ) {
 			pend = l.pending[p];
-			if( p.id === msg.id ) {
+			if( pend.id === msg.id ) {
 				l.pending.splice(p,1);
 				break;
 			}
@@ -208,15 +208,21 @@ ws.processMessage = function (ws, msg) {
 		let pend = null;
 		for( let p = 0; p < l.pending.length; p++ ) {
 			pend = l.pending[p];
-			if( p.id === msg.id ) {
+			if( pend.id === msg.id ) {
 				l.pending.splice(p,1);
 				break;
 			}
 		}
+		if( !pend ) {
+			console.log( "Failed to find pending for :", msg );
+			return true;
+		}
 		if (msg.success) {
-			;//Alert(" Login Success" );
-		} else
-			Alert("Login Failed...");
+			pend.res( msg.name ); // resolves doGuest(), which raises connector "guest"
+		} else {
+			pend.rej( msg.name ? "Bad display name" : "Login Failed" );
+			Alert( msg.name ? "That display name can't be used..." : "Login Failed..." );
+		}
 		return true;
 	} else if (msg.op === "expect") {
 		ws.on( "expect", msg );
@@ -237,6 +243,9 @@ ws.processMessage = function (ws, msg) {
 					pend.res({ svc: msg.svc, name: msg.name }); // return my user name also... (account login doesn't know)
 				} else {
 					if (msg.probe) Alert("Probe for services detected");
+					else if (msg.noUsers) Alert("Service is not available to guests");
+					// settle the request so the caller can put its form back up
+					pend.rej(msg);
 				}
 			}
 		}

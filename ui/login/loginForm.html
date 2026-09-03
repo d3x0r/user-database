@@ -61,13 +61,17 @@
 				gsiClientLoadResolve(true);
 				gsiClientLoadResolve = null;
 			}
-			for( let wait of window.d3x0r.popups.scriptPending ) {
-				window.d3x0r.popups.onScriptDone( wait, ()=>{
-					if( window.google && window.google.accounts) {
-						gsiClientLoadResolve(true);
-						gsiClientLoadResolve = null;
+			const popupsList = window.d3x0r.popups? window.d3x0r.popups2?[window.d3x0r.popups,window.d3x0r.popups2]:[window.d3x0r.popups]:window.d3x0r.popups2?[window.d3x0r.popups2]:null;
+			for( let pops of popupsList ) {
+				const pp = pops.scriptPending;
+				if( pp ) for( let wait of pp ) {
+					pops.onScriptDone( wait, ()=>{
+						if( window.google && window.google.accounts) {
+							gsiClientLoadResolve(true);
+							gsiClientLoadResolve = null;
 					}
 				} )
+				}
 			}
 			return gsiClientLoadedWait;
 		}

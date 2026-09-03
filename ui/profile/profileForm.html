@@ -13,11 +13,11 @@
 </div>
    	
 <script type="module">
-// this script can be found... by rootId
-const rootNode = document.getElementById( rootId ).parentNode;
-
+// fillFromURL defines rootId for this script; the form lives in the popup's shadow
+// root, so document.getElementById can't see it -- ask popups for the shadow instead.
+import {popups} from "/node_modules/@d3x0r/popups/popups.mjs"
 import {ProfileContent} from "./profileForm.js";
-console.log( "rootNode is null?", rootNode );
+const rootNode = popups.getFilledParent( rootId );
 new ProfileContent( rootNode );
 
 </script>

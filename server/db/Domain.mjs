@@ -36,6 +36,18 @@ export async function createInitialDomain(domain,service, user) {
 				console.log( "Got org...")
 				const dom = await org.getDomain( domain, user );
 				console.log( "got domain...", dom );
+				// a restart re-registers a service that is already stored; attach the new
+				// connection to that service instead of creating a duplicate by name
+				for( let s of dom.services ) {
+					if( s instanceof Promise ) s = await s;
+					if( s && s.name === service ) {
+						console.log( "Service", service, "already exists on", domain, "; reusing it for this registration" );
+						s.addInstance( regPending.ws );
+						regPending.res( s );
+						l.registrations.splice( r, 1 );
+						return s;
+					}
+				}
 				const newSrvc = new Service().set( dom, service, user );
 				UserDb.on( "newService", newSrvc );
 				//console.log( "----------------------------------------- SERVICE STORE HERE -------------------------------------" );

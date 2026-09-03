@@ -17,54 +17,94 @@ import { JSOX } from "/node_modules/jsox/lib/jsox.mjs"
 //console.log( "location:", location, import.meta );
 
 let workerInterface = null;
-const importing = import(here.origin + "/node_modules/@d3x0r/socket-service/swc.js").then((module) => {
-	workerInterface = module.workerInterface;
-	workerInterface.initWorker();
-}).catch((err) => {
-	// might not support workers... maybe we can just serve the websockets?
-	workerInterface = {
-		//res( workerInterface.connect(addr, protocol || "login", status, processMessage) );
-		async connect(addr,protocol,status, processMessage ) {
-			return new Promise( (res,rej)=>{
-				const ws = new WebSocket( addr, protocol );
-				const events = {
-					close:[],
-				}
-				ws.onopen = (evt)=>{
-					console.log( "websocket connected?")
-					res( socket );
-				}
-				ws.onmessage = (evt)=>{
-					processMessage( socket, evt.data );
-				}
-				ws.onclose = (evt)=>{
-					console.log( "websocket closed?", evt)
-				}
-				const socket = {
-					setUiLoader() {},
-					close() {},
-					on(a,b){
-						if( a == "close" ) {
-							if( "function" == typeof b )
-								events.close.push(b);
-						}
-						else 
-							ws.on(a,b);
-					},
-					//processMessage( ws,msg) {},
-					send(a) {
-						ws.send(a);
-					},
-				}
-			})
+
+// ---- direct websocket fallback ------------------------------------------------
+// socket-service normally routes sockets through a service worker (which also lets
+// the worker serve UI fetched over the socket).  If the worker can't register, or
+// registers but never activates (embedded browsers, private windows, some devtools
+// states), nothing would ever connect.  This stub gives connect() the same shape
+// the login flow uses, straight over a WebSocket, with no fetch/UI-loader support.
+let localSocketId = 0;
+class LocalSocket {
+	socket = null;    // id, as the worker sockets have
+	ws = null;
+	cb = null;        // status callback
+	handleMessage = null;
+	events_ = {};
+	constructor( addr, protocol, cb, onMsg ) {
+		this.socket = "local:" + ( ++localSocketId );
+		this.cb = cb;
+		this.handleMessage = onMsg;
+		this.ws = new WebSocket( addr, protocol );
+		this.ws.onopen = () => { if( this.cb ) this.cb( "Open" ); this.on( "open" ); };
+		this.ws.onmessage = ( evt ) => {
+			if( this.handleMessage ) this.handleMessage( this, evt.data );
+			if( this.onmessage ) this.onmessage( evt.data );
+		};
+		this.ws.onclose = ( evt ) => {
+			this.on( "close", [ evt.code, evt.reason ] );
+			if( this.onclose ) this.onclose( evt.code, evt.reason );
+		};
+		this.ws.onerror = () => { if( this.cb ) this.cb( "Error" ); };
+	}
+	// same dual-use as the worker socket: a function registers, anything else dispatches.
+	on( event, cb ) {
+		if( "function" !== typeof cb ) {
+			if( event in this.events_ ) {
+				if( cb instanceof Array ) this.events_[event]( ...cb );
+				else this.events_[event]( cb );
+			}
+		} else {
+			this.events_[event] = cb;
 		}
 	}
-	/*
-	if (!alertForm) alertForm = new AlertForm();
-	alertForm.caption = "Site does not support socket-service.\n" + err.message;
-	alertForm.show();
-	*/
-});
+	send( a ) { this.ws.send( "string" === typeof a ? a : JSOX.stringify( a ) ); }
+	close( code, reason ) { this.ws.close( code, reason ); }
+	// UI-over-socket features are worker-only; accept the calls and do nothing.
+	setUiLoader() {}
+	clearUiLoader() {}
+	set loader( val ) {}
+}
+
+const localInterface = {
+	initWorker() {},
+	setUiLoader() {},
+	expect() {},
+	connect( addr, protocol, cb, onMsg ) {
+		return new Promise( ( res, rej ) => {
+			const sock = new LocalSocket( addr, protocol, cb, onMsg );
+			let opened = false;
+			sock.on( "open", () => { opened = true; res( sock ); } );
+			sock.on( "close", ( code, reason ) => { if( !opened ) rej( new Error( "connect failed: " + code + " " + reason ) ); } );
+		} );
+	},
+};
+
+function fallbackToLocal( reason ) {
+	if( workerInterface === localInterface ) return;
+	console.log( "socket-service worker unavailable, using direct websockets:", reason );
+	workerInterface = localInterface;
+}
+
+// resolves once it is known which interface to use; openSocket() waits on this.
+const importing = ( async () => {
+	try {
+		const module = await import( here.origin + "/node_modules/@d3x0r/socket-service/swc.js" );
+		if( !( "serviceWorker" in navigator ) ) return fallbackToLocal( "no service worker support" );
+		workerInterface = module.workerInterface;
+		workerInterface.initWorker();
+		// swc.js logs a failed registration but doesn't expose it; registering the same
+		// script and scope again yields the same registration, or the same rejection.
+		const registered = navigator.serviceWorker.register( "/socket-service-swbundle.js", { scope: "/" } )
+			.then( () => navigator.serviceWorker.ready.then( () => null )
+			     , ( err ) => ( err && err.message ) || "registration failed" );
+		const timeout = new Promise( ( res ) => setTimeout( () => res( "service worker did not become ready" ), 5000 ) );
+		const reason = await Promise.race( [ registered, timeout ] );
+		if( reason ) fallbackToLocal( reason );
+	} catch( err ) {
+		fallbackToLocal( err.message );
+	}
+} )();
 //import {workerInterface} from location.origin+"/socket-service-client.js"
 
 let isGuestLogin = false;
@@ -94,6 +134,13 @@ const l = {
 
 	bindControls(popup, root) {
 		l.loginForm = popup;
+
+		// makeLoginForm binds through the client it was given AND through the caller's
+		// ready() hook; when both are wired (profile.js) this runs twice on the same
+		// root and the guest/create toggles get two handlers that cancel each other.
+		// Handlers below read l.ws live, so one binding per root is all that's needed.
+		if( root.loginControlsBound ) return;
+		root.loginControlsBound = true;
 
 		const f = root;
 
@@ -379,9 +426,7 @@ function status( msg, arg ) {
 
 
 async function openSocket(addr, protocol ) {
-	if (!workerInterface) {
-		await importing
-	}
+	await importing; // worker ready, or fallen back to direct websockets
 	return new Promise((res, rej) => {
 
 		let index = -1;

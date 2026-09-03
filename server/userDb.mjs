@@ -360,13 +360,16 @@ class UserDb extends Events {
 		}
 		//console.log( "Domain:", domain, oldDomain, forUser );
 		// this is actually check pending registrations (which might only be a service and not a domain.)
-		await createInitialDomain( domain, service, forUser );
+		const created = await createInitialDomain( domain, service, forUser );
 
 		// re-fetch domain in case it was just created above
 		if( !oldDomain ) oldDomain = await l.domains.get( domain );
 
 		debug_ && console.log( "Have a domain now, doncha?", domain, service, oldDomain );
-		const oldService = await oldDomain?.getService( service, forUser );
+		// a service created just now from a pending registration is the answer; don't
+		// depend on the domain index having been written yet to find it again.
+		const oldService = created || await oldDomain?.getService( service, forUser );
+		if( created && !oldDomain ) oldDomain = created.domain || true;
 		if( !oldDomain || !oldService ) {
 			// don't allow guests to create services.
 

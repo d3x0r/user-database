@@ -110,8 +110,13 @@ export class User  extends StoredObject{
 		const found = [];
 		let s = 0;
 		for( ; s < this.sashes.length; s++ ) {
-			const sash = this.sashes[s];
-			//console.log( "Sash is incomplete?", sash, sash.service, sash.service.domain )
+			let sash = this.sashes[s];
+			// revived from storage these are still references (promises) or the stored
+			// wrapper; settle them in place so later lookups see real Sash objects.
+			if( sash instanceof Promise ) sash = await sash;
+			if( sash && !( "for" in sash ) && sash.sash ) sash = sash.sash;
+			if( !sash || "function" !== typeof sash.for ) { console.log( "User has an unusable sash entry:", this.sashes[s] ); continue; }
+			this.sashes[s] = sash;
 			if( sash.for( domain ) )
 				found.push(sash);
 		} ;
