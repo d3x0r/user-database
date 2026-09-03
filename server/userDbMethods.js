@@ -135,7 +135,7 @@ ws.processMessage = function (ws, msg) {
 			return;
 		}
 		if (msg.success) {
-			pend.res();
+			pend.res(msg.name);
 		} else 
 			pend.rej();
 		return true;

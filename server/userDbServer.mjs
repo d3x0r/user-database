@@ -34,6 +34,12 @@ import {handleRequest as socketHandleRequest} from "@d3x0r/socket-service";
 const withLoader = true;//process.env.SELF_LOADED;
 const resourcePath = [process.env.RESOURCE_PATH, (nearPath + "/../ui")];
 const npmPath = [process.env.NPM_PATH, (nearPath+"/..")];
+
+sack.system.programName = "@d3x0r/Login Services";
+sack.system.enableExitSignal( ()=>{
+	process.exit(1);
+} );
+
 // make sure we load the import script
 
 const JSOX = sack.JSOX;
@@ -529,7 +535,7 @@ export class UserServer extends Protocol {
 
 			//console.log( "User is set in the client's ws.state (but not the services..." );
 			ws.state.user= user;
-			ws.send( JSON.stringify( { op:"guest", success: true, id:msg.id } ));
+			ws.send( JSON.stringify( { op:"guest", success: true, id:msg.id, name } ));
 			{
 				const key = sack.Id();
 				UserDb.saveContinue( user, key );
@@ -549,7 +555,7 @@ export class UserServer extends Protocol {
 			ws.state.user = user;
 
 			// login could be replayed instead?
-			ws.send( JSON.stringify( { op:"resume", guest:user.guest, success: true, id:msg.id } ));
+			ws.send( JSON.stringify( { op:"resume", name:user.name, success: true, id:msg.id } ));
 			{
 				const key = sack.Id();
 				UserDb.saveContinue( user, key );
@@ -647,7 +653,7 @@ export class UserServer extends Protocol {
 		}
 		//console.log( "sending false" );
 		console.log( "Otherwise I guess it's true?" );
-		ws.send( JSON.stringify( { op:"login", success: true, id:msg.id } ));
+		ws.send( JSON.stringify( { op:"login", success: true, id:msg.id, name: user.name } ));
 		if( enable_reconnect ) {
 			const key = sack.Id();
 			UserDb.saveContinue( user, key, msg.deviceId );

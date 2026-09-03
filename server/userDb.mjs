@@ -2,6 +2,7 @@
 const debug_ = false;  // controls logging... 
 
 import {sack} from "sack.vfs"
+import {Events} from "sack.vfs/Events2" 
 import {ObjectStorage} from "sack.vfs/object-storage"
 import {StoredObject} from "sack.vfs/object-storage-object"
 const JSOX=sack.JSOX;
@@ -166,8 +167,13 @@ const encoders = [
 
 const eventMap = {};
 
-const UserDb = {
-	async hook( storage ) {
+class UserDb extends Events {
+	User;
+	Device;
+	UniqueIdentifier;
+	socketHandleRequest;
+
+	static async hook( storage ) {
 		l.storage = storage;
 		BloomNHash.hook( storage );
 		console.trace( "------------- HOOK USER DATABASE --------------- ");
@@ -195,7 +201,8 @@ const UserDb = {
                         
 			l.clients   = await storage.get( l.ids.clientId );
 			l.email     = await storage.get( l.ids.emailId );
-			l.email.caseInsensitive = true;
+			// email is now just a recovery hash (forgot login, secondary password to reset password)
+			//l.email.caseInsensitive = true;
 			l.account   = await storage.get( l.ids.accountId );
 			//console.log( "reloading account map?", l.account, l.ids );
 			l.account.caseInsensitive = true;
@@ -227,7 +234,8 @@ const UserDb = {
 			l.name.caseInsensitive = true;
 			l.name.hook( storage );
 			l.email     = new BloomNHash();
-			l.email.caseInsensitive = true;
+			// email is now just a recovery hash (forgot login, secondary password to reset password)
+			//l.email.caseInsensitive = true;
 			l.email.hook( storage );
 			l.reconnect = new BloomNHash();
 			l.reconnect.hook( storage );
@@ -252,42 +260,28 @@ const UserDb = {
 		if( initResolve )
 			initResolve();
 		else console.log( "Init never resolves...." );
-	},
-	on( event, data ) {
-		if( "function" === typeof data ) {
-			let a = eventMap[event];
-			if( !a ) a = eventMap[event] = [];
-			a.push( data );
-		} else {
-			const a = eventMap[event];
-			if( a ) for( let f of a ) f( data );
-		}
-	},
-	off( event, f ) {
-		console.log( "disabling events not enabled" );
-	},
-	get stringifier() {
+	}
+	static get stringifier() {
 		const stringifier = JSOX.stringifier();
 		encoders.forEach( e=>stringifier.toJSOX( e.tag, e.p, e.f ) );
 		return stringifier;
-	},
-	getUser(args){
+	}
+	static getUser(args){
 		return getUser(args);
-	},
-	async isEmailUsed( email ) {
+	}
+	static async isEmailUsed( email ) {
 		// this is just used for a check 'if used'
 		return !(await l.email.get( email ));
-	},
-	async isNameUsed( name ) {
+	}
+	static async isNameUsed( name ) {
 		// this is just used for a check 'if used'
 		return !!(await l.name.get( name ));
-	},
-	async isAccountUsed( account ) {
+	}
+	static async isAccountUsed( account ) {
 		// this is just used for a check 'if used'
 		return !!(await l.account.get( account ));
-	},
-	User:User,
-	async getIdentifier( i ) {
+	}
+	static async getIdentifier( i ) {
 		if( i ) {
 			console.log( "clients to get ID fails?", i );
 			return l.clients.get( i ).then( (id)=>{
@@ -304,35 +298,32 @@ const UserDb = {
 			});
 		}
 		return getIdentifier();
-	},
-	async makeIdentifier( i ) {
+	}
+	static async makeIdentifier( i ) {
 		return makeIdentifier(i);
-	},
-        async addIdentifier( i ) {
-			
-            return l.clients.set( i.key, i );
-        },
-        async getOrg( i ) {		
-            	return l.orgs.get( i.key, i );
-        },
-	Device:Device,
-	UniqueIdentifier:UniqueIdentifier,
-	socketHandleRequest,
-	saveContinue(user, id){
+	}
+   static async addIdentifier( i ) {
+		
+       return l.clients.set( i.key, i );
+   }
+   static async getOrg( i ) {		
+       	return l.orgs.get( i.key, i );
+   }
+	static saveContinue(user, id){
 		if( user.next_login )
 			l.reconnect.delete( user.next_login );
 		console.log( "Save Continue - puts reconnect into database: ", id, user );
 		l.reconnect.set( id, user );
 		user.next_login = id;
 		return user.store();
-	},
-	async resume( id ) {
+	}
+	static async resume( id ) {
 		const user = await l.reconnect.get( id );
 		return user;
-	},
+	}
 
 	// register a service... this essentially blocs 
-	async getService( ws, service ) {
+	static async getService( ws, service ) {
 		console.log( 'this is called when a service registers...', "(service)",service.service, service.description )
 		function defer(why) {
 			console.log( "Service:", service.description, " has to wait for registration...", why==2?"Service request pending":why);
@@ -356,8 +347,8 @@ const UserDb = {
 		
 		//console.log( "Resulting with service( unless defeerred)" );
 		return oldService;
-	},
-	async requestService( domain, service, forUser ) {
+	}
+	static async requestService( domain, service, forUser ) {
 
 		let oldDomain = await l.domains.get( domain );
 		if( !oldDomain ) {
@@ -410,9 +401,9 @@ const UserDb = {
 		const inst = oldService.getConnectedInstance();
 		console.log( "forUser", forUser, inst );
 		return inst;
-	},
+	}
 
-	async grant( id, key, addr ) {
+	static async grant( id, key, addr ) {
 		const auth = l.authorizing.get( id );
 		if( auth ) {
 			auth.res( {key:key,addr:addr} );
@@ -420,10 +411,7 @@ const UserDb = {
 			console.trace( "Why is somoene granting authorization that wasn't requested?", id, key, addr );
 		}
 	}
-
-
 }
-
 
 
 Object.freeze( UserDb );

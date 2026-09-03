@@ -133,7 +133,7 @@ export class User  extends StoredObject{
 	}
 
 	static async get( account ) {
-		// account should be a string, but get/set on bloomnhas will handle strings
+		// account should be a string, but get/set on bloomnhash will handle strings
 		const t = typeof account; if( t !== "number" && t!=="string" ) throw new Error( "Unsupported key type passed:" +  t + ":"+account );
 		//console.log( "lookingup", typeof account, account );
 		if( !account ) {
