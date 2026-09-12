@@ -1,6 +1,6 @@
 
 import { SaltyRNG } from "/node_modules/@d3x0r/srg2/salty_random_generator2.mjs"
-import { popups } from "/node_modules/@d3x0r/popups/popups.mjs"
+import { popups } from "/node_modules/@d3x0r/popups2/popups.js"
 import { profileState } from "./profile.js"
 
 // Drives profileForm.html.  All traffic goes through profileState (profile.js), which

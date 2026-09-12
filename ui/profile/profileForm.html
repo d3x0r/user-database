@@ -75,9 +75,7 @@
 <script type="module">
 // fillFromURL defines rootId for this script; the form lives in the popup's shadow
 // root, so document.getElementById can't see it -- ask popups for the shadow instead.
-import {popups} from "/node_modules/@d3x0r/popups/popups.mjs"
-import {ProfileContent} from "./profileForm.js";
-const rootNode = popups.getFilledParent( rootId );
-new ProfileContent( rootNode );
+import( "./profileForm.js" ).then( module=>new module.ProfileContent( 
+	(window.d3x0r?.popups2 || window.d3x0r?.popups)?.getFilledParent( rootId ) ) )
 
 </script>

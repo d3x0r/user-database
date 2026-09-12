@@ -1,7 +1,15 @@
 
 
 
-import {Popup,popups} from "/node_modules/@d3x0r/popups/popups.mjs"
+import {Popup,popups} from "/node_modules/@d3x0r/popups2/popups.js"
+
+import loginServer from "/internal/loginServer";
+const loginEndpoint = (location.protocol+"//"+loginServer.loginRemote+":"+loginServer.loginRemotePort) || "https://d3x0r.org:8089";
+
+const {makeLoginForm} = await ( import( loginEndpoint + "/login/login-form.js" ).catch( (err)=>{
+	return import( loginEndpoint.replace("https", "http" )+ "/login/login-form.js" );
+} ) );
+//import {makeLoginForm} from "/node_modules/@d3x0r/popups2/forms/"
 import {JSOX} from "/node_modules/jsox/lib/jsox.mjs"
 
 
@@ -72,7 +80,7 @@ export class Profile extends Popup {
 			} ); // trigger client begin connection...
 		}
 
-		const login = l.login = popups.makeLoginForm( async (guest)=>{
+		const login = l.login = makeLoginForm( async (guest)=>{
 			console.log( "parameter is guest?:", guest );
 			//console.log( "login form event" );
 			//debugger;
