@@ -56,16 +56,6 @@ const clientConfig = {
 	google: !!client
 };
 
-function read( name ) {
-        try {
-                const data = sack.Volume.readAsString( name );
-                return data;
-        } catch(err) {
-                console.log( "Failed to load cert:", name );
-                return undefined;
-        }
-}
-
 const methods = disk.read( nearPath+"/userDbMethods.js" ).toString();
 const methodMsg = JSON.stringify( {op:"addMethod", code:methods, config:clientConfig} );
 
@@ -75,22 +65,6 @@ const serviceMethodMsg = JSON.stringify( {op:"addMethod", code:serviceMethods} )
 const serviceLoginScript = disk.read( nearPath+"/serviceLogin.mjs" ).toString();
 
 import {UserDbRemote} from "./serviceLogin.mjs";
-
-function getCertChain( ) {
-        //SSLCertificateFile /etc/letsencrypt/live/d3x0r.org/fullchain.pem
-        //SSLCertificateKeyFile /etc/letsencrypt/live/d3x0r.org/privkey.pem
-
-        if( process.env.SSL_PATH ) return process.env.SSL_PATH + "/fullchain.pem"
-        return  nearPath + "/certgen/cert-chain.pem"
-}
-function getCertKey( ) {
-        if( process.env.SSL_PATH ) return process.env.SSL_PATH + "/privkey.pem"
-        return  nearPath + "/certgen/rootkeynopass.prv"
-}
-
-const certChain = read( getCertChain() );
-const certKey = read( getCertKey() );
-
 
 console.log( "getting request handler?", process.env.RESOURCE_PATH || (nearPath + "/../ui")  );
 export const loginRequest = getRequestHandler(	{ 
@@ -133,8 +107,8 @@ if( withLoader ) go.then( ()=>{
 	const serverOpts = { port ,
 		resourcePath,
 		npmPath,
-                cert : certChain,
-                key : certKey
+ //               cert : certChain,
+ //               key : certKey
 		};
 	//console.log( "serving from?", serverOpts );
 	if( config.certPath ) Object.assign( serverOpts, { 
@@ -224,13 +198,6 @@ export class UserServer extends Protocol {
 			console.log( "Google Service Sent us a request?", req );
 		});
 		// server.server is the websocket itself
-		this.server.server.on( "lowError",function (error, address, buffer) {
-			if( error !== 1 ) 
-				console.log( "Low Error with:", error, address, buffer  );
-			if( buffer )
-				buffer = new TextDecoder().decode( buffer );
-			this_.server.server.disableSSL(buffer); // resume with non SSL
-		} );
 
 		console.log( "File handler is a protocol level handler... should only add once?" );
 		this.addFileHandler();
