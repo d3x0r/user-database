@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node --import sack.vfs/import server/userDbServer.mjs",
     "gdb": "gdb --args node --inspect --experimental-loader=sack.vfs/import.mjs userDbServer.mjs",
-    "link": "npm link @d3x0r/srg2 @d3x0r/popups2 @d3x0r/socket-service @d3x0r/user-database-remote jsox sack.vfs"
+    "link": "npm link --ignore-scripts @d3x0r/srg2 @d3x0r/popups2 @d3x0r/socket-service @d3x0r/user-database-remote jsox sack.vfs"
   },
   "exports": {
     ".": {
